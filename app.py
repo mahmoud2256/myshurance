@@ -13,28 +13,10 @@ APP_PASSWORD = "myshurance123"
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
-
-if not st.session_state["logged_in"]:
-    st.title("🔐 Myshurance - Login")
-    st.caption("Please login to continue")
-    with st.form("login_form"):
-        u = st.text_input("Username")
-        p = st.text_input("Password", type="password")
-        login_btn = st.form_submit_button("Login", use_container_width=True)
-        if login_btn:
-            if u == APP_USERNAME and p == APP_PASSWORD:
-                st.session_state["logged_in"] = True
-                st.success("Welcome ✅")
-                st.rerun()
-            else:
-                st.error("❌ Wrong username or password")
-    st.info("Default: admin / myshurance123")
-    st.stop()
-
-st.sidebar.button("Logout 🚪", on_click=lambda: st.session_state.update({"logged_in": False}))
-
-st.title("Myshurance Hub")
-st.caption("Google Sheets Live - Companies / Addition / Deletion / Upgrade / Approvals / Analytics")
+if "role" not in st.session_state:
+    st.session_state["role"] = None
+if "emp_national_id" not in st.session_state:
+    st.session_state["emp_national_id"] = ""
 
 PHOTOS_DIR = "damaged_cards"
 os.makedirs(PHOTOS_DIR, exist_ok=True)
@@ -63,8 +45,153 @@ def load_sheet_gs(name):
         df = df[~(df.astype(str).apply(lambda x: "".join(x).strip()=="", axis=1))]
         return df
     except Exception as e:
-        st.warning(f"Sheet {name} not found: {e}")
         return pd.DataFrame()
+
+# --- LOGIN SCREEN ---
+if not st.session_state["logged_in"]:
+    st.title("🔐 Myshurance - Login")
+    st.caption("Admin or Employee - اختار نوع الدخول")
+    login_type = st.radio("Login as:", ["👨‍💼 Admin", "👤 Employee - الموظف"], horizontal=True)
+
+    if login_type == "👨‍💼 Admin":
+        with st.form("login_form"):
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            login_btn = st.form_submit_button("Login as Admin", use_container_width=True)
+            if login_btn:
+                if u == APP_USERNAME and p == APP_PASSWORD:
+                    st.session_state["logged_in"] = True
+                    st.session_state["role"] = "admin"
+                    st.success("Welcome Admin ✅")
+                    st.rerun()
+                else:
+                    st.error("❌ Wrong username or password")
+        st.info("Default Admin: admin / myshurance123")
+    else:
+        st.markdown("### 👤 Employee Self-Service")
+        st.caption("ادخل بالرقم القومي عشان تشوف بياناتك وموافقاتك")
+        with st.form("emp_login"):
+            emp_id = st.text_input("National ID - الرقم القومي *", placeholder="29xxxxxxxxxxxx")
+            emp_btn = st.form_submit_button("View My Data 👀", use_container_width=True)
+            if emp_btn:
+                if not emp_id:
+                    st.error("اكتب الرقم القومي")
+                else:
+                    df_check = load_sheet_gs("addition")
+                    if df_check.empty:
+                        st.error("No data yet")
+                    else:
+                        # دور على الرقم القومي في أي عمود اسمه National ID
+                        col = None
+                        for c in df_check.columns:
+                            if "National" in c:
+                                col = c
+                                break
+                        if col is None:
+                            st.error("Sheet error - National ID column not found")
+                        else:
+                            found = df_check[df_check[col].astype(str).str.strip() == emp_id.strip()]
+                            if found.empty:
+                                st.error("❌ الرقم القومي مش موجود - كلم الـ HR")
+                            else:
+                                st.session_state["logged_in"] = True
+                                st.session_state["role"] = "employee"
+                                st.session_state["emp_national_id"] = emp_id.strip()
+                                st.success("Welcome ✅")
+                                st.rerun()
+        st.info("الموظف بيدخل بالرقم القومي بس، من غير باسورد")
+    st.stop()
+
+# --- LOGOUT ---
+def do_logout():
+    st.session_state["logged_in"] = False
+    st.session_state["role"] = None
+    st.session_state["emp_national_id"] = ""
+    st.rerun()
+
+# ================= EMPLOYEE PORTAL =================
+if st.session_state.get("role") == "employee":
+    st.sidebar.button("Logout 🚪", on_click=do_logout)
+    emp_id = st.session_state["emp_national_id"]
+    st.title("👤 My Insurance - بياناتي")
+    st.caption(f"National ID: {emp_id}")
+
+    df_add = load_sheet_gs("addition")
+    df_del = load_sheet_gs("deletion")
+    df_upg = load_sheet_gs("up grade")
+    df_appr = load_sheet_gs("approvals")
+
+    def find_by_nid(df, nid):
+        if df.empty:
+            return pd.DataFrame()
+        col = None
+        for c in df.columns:
+            if "National" in c:
+                col = c
+                break
+        if col is None:
+            return pd.DataFrame()
+        return df[df[col].astype(str).str.strip() == nid.strip()]
+
+    my_data = find_by_nid(df_add, emp_id)
+    my_del = find_by_nid(df_del, emp_id)
+    my_upg = find_by_nid(df_upg, emp_id)
+    my_appr = find_by_nid(df_appr, emp_id)
+
+    if my_data.empty:
+        st.error("No data found")
+        st.stop()
+
+    # بياناتي
+    st.subheader("📋 My Card Data - بيانات الكارت")
+    # اعرض أول صف بس
+    row = my_data.iloc[0]
+    c1, c2, c3 = st.columns(3)
+    # حاول تجيب الاسم والخطة
+    fname = row.get("* First Name", row.get("First Name", ""))
+    lname = row.get("* Family Name", row.get("Family Name", ""))
+    plan = row.get("* Plan", row.get("Plan", ""))
+    dep = row.get("* Dependency", row.get("Dependency", ""))
+    c1.metric("Name", f"{fname} {lname}")
+    c2.metric("Plan", str(plan))
+    c3.metric("Dependency", str(dep))
+    st.dataframe(my_data, use_container_width=True)
+
+    st.divider()
+    st.subheader("✅ My Approvals - موافقاتي")
+    if my_appr.empty:
+        st.info("No approvals yet - مفيش موافقات لسه")
+    else:
+        st.dataframe(my_appr, use_container_width=True)
+        # عد الحالات
+        if "Status" in my_appr.columns:
+            cc1, cc2, cc3 = st.columns(3)
+            cc1.metric("Pending", len(my_appr[my_appr["Status"]=="Pending"]))
+            cc2.metric("Approved", len(my_appr[my_appr["Status"]=="Approved"]))
+            cc3.metric("Rejected", len(my_appr[my_appr["Status"]=="Rejected"]))
+
+    st.divider()
+    st.subheader("⬆️ My Upgrades")
+    if my_upg.empty:
+        st.info("No upgrades")
+    else:
+        st.dataframe(my_upg, use_container_width=True)
+
+    st.divider()
+    st.subheader("➖ My Deletion Requests")
+    if my_del.empty:
+        st.info("No deletion requests")
+    else:
+        st.dataframe(my_del, use_container_width=True)
+
+    st.divider()
+    st.info("لو فيه بيانات غلط، كلم الـ HR بتاع شركتك - انت تقدر تشوف بس، مش تعدل")
+    st.stop()
+
+# ================= ADMIN PORTAL =================
+st.sidebar.button("Logout 🚪", on_click=do_logout)
+st.title("Myshurance Hub")
+st.caption("Google Sheets Live - Companies / Addition / Deletion / Upgrade / Approvals / Analytics")
 
 def save_to_sheet_gs(sheet_name, new_row):
     ws = get_sheet().worksheet(sheet_name)
@@ -77,13 +204,6 @@ def save_to_sheet_gs(sheet_name, new_row):
 
 def save_approvals_gs(df):
     ws = get_sheet().worksheet("approvals")
-    ws.clear()
-    ws.append_row(list(df.columns))
-    for _, r in df.iterrows():
-        ws.append_row([str(x) for x in r.tolist()])
-
-def save_companies_gs(df):
-    ws = get_sheet().worksheet("companies")
     ws.clear()
     ws.append_row(list(df.columns))
     for _, r in df.iterrows():
