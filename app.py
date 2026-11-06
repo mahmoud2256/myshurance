@@ -568,6 +568,23 @@ with tab5:
             pass
     else:
         st.info("No approvals yet for chart")
+            st.divider()
+    st.subheader("📅 Monthly Report - تقرير شهري")
+    sel_month = st.selectbox("Select Month", ["Current Month - الشهر الحالي", "All Time - كل الوقت"])
+    if st.button("Generate Monthly Report 📊", use_container_width=True):
+        st.markdown("### Myshurance Monthly Summary")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("New Additions", len(df_add))
+        c2.metric("Deletions", len(df_del))
+        c3.metric("Upgrades", len(df_upg))
+        c4.metric("Total Approvals", len(df_appr))
+        if not df_appr.empty and "Status" in df_appr.columns:
+            st.write(f"✅ Approved: {len(df_appr[df_appr['Status']=='Approved'])} | ⏳ Pending: {len(df_appr[df_appr['Status']=='Pending'])} | ❌ Rejected: {len(df_appr[df_appr['Status']=='Rejected'])}")
+            try:
+                st.write(f"💰 Total Approved Amount: {df_appr[df_appr['Status']=='Approved']['Amount'].astype(float).sum():,.0f}")
+            except:
+                pass
+        st.success("ده التقرير اللي ممكن تبعته للشركة كل أول شهر ✅")
     if not df_comp.empty and "Members Count" in df_comp.columns:
         st.markdown("### Companies by Members Count")
         try:
