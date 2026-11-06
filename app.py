@@ -419,7 +419,7 @@ with tab1:
         st.info("No addition requests yet")
     else:
         st.dataframe(df_add, use_container_width=True)
-            st.divider()
+        st.divider()
         st.subheader("🪪 Print Member Card - طباعة الكارت")
         # اختار عضو بالرقم القومي
         nid_col = None
