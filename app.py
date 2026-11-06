@@ -8,7 +8,6 @@ import urllib.parse
 st.set_page_config(page_title="Myshurance - Hub", layout="wide")
 
 # --- LOGIN ---
-# غيّر الباسورد من هنا لو حابب
 APP_USERNAME = "admin"
 APP_PASSWORD = "myshurance123"
 
@@ -29,23 +28,70 @@ if not st.session_state["logged_in"]:
                 st.rerun()
             else:
                 st.error("❌ Wrong username or password")
-    st.info("Default: admin / myshurance123 - غيّرها من أول الكود")
+    st.info("Default: admin / myshurance123")
     st.stop()
 
-# --- Logout Button ---
 st.sidebar.button("Logout 🚪", on_click=lambda: st.session_state.update({"logged_in": False}))
 
 st.title("Myshurance Hub")
-st.caption("Census List - Companies / Addition / Deletion / Upgrade / Approvals / Analytics")
+st.caption("Google Sheets Live - Companies / Addition / Deletion / Upgrade / Approvals / Analytics")
 
-FILE = "Census_List.xlsx"
-APPROVALS_FILE = "approvals.xlsx"
-COMPANIES_FILE = "companies.xlsx"
 PHOTOS_DIR = "damaged_cards"
 os.makedirs(PHOTOS_DIR, exist_ok=True)
 
-st.sidebar.header("📱 【entity-WhatsApp¦canonical_name=WhatsApp】 Settings")
-wa_number = st.sidebar.text_input("HR / Company 【entity-WhatsApp¦canonical_name=WhatsApp】 Number", placeholder="2010xxxxxxxx", value="")
+# --- GOOGLE SHEETS CONNECTION ---
+@st.cache_resource
+def get_gs_client():
+    import gspread
+    from google.oauth2.service_account import Credentials
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+    return gspread.authorize(creds)
+
+def get_sheet():
+    client = get_gs_client()
+    return client.open_by_url(st.secrets["GOOGLE_SHEET_URL"])
+
+def load_sheet_gs(name):
+    try:
+        ws = get_sheet().worksheet(name)
+        data = ws.get_all_records()
+        df = pd.DataFrame(data)
+        df.columns = [str(c).strip() for c in df.columns]
+        df = df.loc[:, ~df.columns.duplicated(keep="first")]
+        df = df.dropna(how="all")
+        df = df[~(df.astype(str).apply(lambda x: "".join(x).strip()=="", axis=1))]
+        return df
+    except Exception as e:
+        st.warning(f"Sheet {name} not found: {e}")
+        return pd.DataFrame()
+
+def save_to_sheet_gs(sheet_name, new_row):
+    ws = get_sheet().worksheet(sheet_name)
+    headers = ws.row_values(1)
+    if not headers:
+        headers = list(new_row.keys())
+        ws.append_row(headers)
+    row = [str(new_row.get(h, "")) for h in headers]
+    ws.append_row(row)
+
+def save_approvals_gs(df):
+    ws = get_sheet().worksheet("approvals")
+    ws.clear()
+    ws.append_row(list(df.columns))
+    for _, r in df.iterrows():
+        ws.append_row([str(x) for x in r.tolist()])
+
+def save_companies_gs(df):
+    ws = get_sheet().worksheet("companies")
+    ws.clear()
+    ws.append_row(list(df.columns))
+    for _, r in df.iterrows():
+        ws.append_row([str(x) for x in r.tolist()])
+
+# --- WhatsApp ---
+st.sidebar.header("📱 WhatsApp Settings")
+wa_number = st.sidebar.text_input("HR / Company WhatsApp Number", placeholder="2010xxxxxxxx", value="")
 st.sidebar.caption("الرقم اللي هيتبعتله التنبيه، بكود الدولة من غير +")
 
 def wa_link(message):
@@ -62,66 +108,17 @@ def show_wa_button(message, label="Send on WhatsApp 📱"):
     else:
         st.warning("اكتب رقم الواتساب في الـ Sidebar الأول")
 
-def clean_df(df):
-    df.columns = [str(c).strip() for c in df.columns]
-    df = df.loc[:, ~df.columns.duplicated(keep="first")]
-    df = df.dropna(how="all")
-    return df
+df_add = load_sheet_gs("addition")
+df_del = load_sheet_gs("deletion")
+df_upg = load_sheet_gs("up grade")
+df_appr = load_sheet_gs("approvals")
+if df_appr.empty:
+    df_appr = pd.DataFrame(columns=["ID", "Name", "National ID", "Type", "Provider", "Amount", "Status", "Date"])
+df_comp = load_sheet_gs("companies")
+if df_comp.empty:
+    df_comp = pd.DataFrame(columns=["Company Name", "HR Contact", "HR Phone", "Plan", "Members Count", "Created Date"])
 
-def load_sheet(name):
-    try:
-        df = pd.read_excel(FILE, sheet_name=name)
-        return clean_df(df)
-    except:
-        return pd.DataFrame()
-
-def save_to_sheet(sheet_name, new_row):
-    new_row = {str(k).strip(): v for k, v in new_row.items()}
-    all_sheets = pd.read_excel(FILE, sheet_name=None)
-    cleaned = {}
-    for s_name, df_sheet in all_sheets.items():
-        cleaned[s_name] = clean_df(df_sheet)
-    df = cleaned.get(sheet_name, pd.DataFrame())
-    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    df = clean_df(df)
-    cleaned[sheet_name] = df
-    with pd.ExcelWriter(FILE, engine="openpyxl") as writer:
-        for s_name, df_sheet in cleaned.items():
-            df_sheet.to_excel(writer, sheet_name=s_name, index=False)
-
-def load_approvals():
-    if os.path.exists(APPROVALS_FILE):
-        try:
-            return clean_df(pd.read_excel(APPROVALS_FILE))
-        except:
-            return pd.DataFrame(columns=["ID", "Name", "National ID", "Type", "Provider", "Amount", "Status", "Date"])
-    return pd.DataFrame(columns=["ID", "Name", "National ID", "Type", "Provider", "Amount", "Status", "Date"])
-
-def save_approvals(df):
-    df.to_excel(APPROVALS_FILE, index=False)
-
-def load_companies():
-    if os.path.exists(COMPANIES_FILE):
-        try:
-            return clean_df(pd.read_excel(COMPANIES_FILE))
-        except:
-            return pd.DataFrame(columns=["Company Name", "HR Contact", "HR Phone", "Plan", "Members Count", "Created Date"])
-    return pd.DataFrame(columns=["Company Name", "HR Contact", "HR Phone", "Plan", "Members Count", "Created Date"])
-
-def save_companies(df):
-    df.to_excel(COMPANIES_FILE, index=False)
-
-if not os.path.exists(FILE):
-    st.warning("Census_List.xlsx not found - حط الملف جنب app.py")
-    st.stop()
-
-df_add = load_sheet("addition ")
-df_del = load_sheet("deletion ")
-df_upg = load_sheet("up grade ")
-df_appr = load_approvals()
-df_comp = load_companies()
-
-pending = len(df_appr[df_appr["Status"] == "Pending"]) if not df_appr.empty else 0
+pending = len(df_appr[df_appr["Status"] == "Pending"]) if not df_appr.empty and "Status" in df_appr.columns else 0
 
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 col1.metric("Companies", len(df_comp))
@@ -179,7 +176,6 @@ if search:
     if all_df.empty:
         st.info("No data yet")
     else:
-        all_df = clean_df(all_df)
         mask = all_df.astype(str).apply(lambda row: row.str.lower().str.contains(search_lower, na=False).any(), axis=1)
         result = all_df[mask]
         if result.empty:
@@ -206,14 +202,13 @@ with tab0:
                 st.error("Company Name مطلوب")
             else:
                 new_comp = {"Company Name": comp_name, "HR Contact": comp_hr, "HR Phone": comp_phone, "Plan": comp_plan, "Members Count": comp_members, "Created Date": datetime.now().strftime("%Y-%m-%d")}
-                df_comp = pd.concat([df_comp, pd.DataFrame([new_comp])], ignore_index=True)
-                save_companies(df_comp)
+                save_to_sheet_gs("companies", new_comp)
                 st.success(f"Company {comp_name} added ✅")
                 st.rerun()
     st.divider()
     st.subheader("All Companies")
     if df_comp.empty:
-        st.info("No companies yet - ضيف أول شركة، زي 【entity-Allianz¦canonical_name=Allianz】")
+        st.info("No companies yet")
     else:
         st.dataframe(df_comp, use_container_width=True)
 
@@ -240,7 +235,7 @@ with tab1:
                 st.error("First Name و Family Name و National ID مطلوبين")
             else:
                 new_row = {"Staff ID": staff_id, "* First Name": first_name, "* Family Name": family_name, "* Dependency": dependency, "* Gender": gender, "* Date of Birth": str(dob), "* Plan": plan, "* Mobile Number": mobile, "Email ID": email, "* IBAN/Account Number": iban, "* National ID": national_id}
-                save_to_sheet("addition ", new_row)
+                save_to_sheet_gs("addition", new_row)
                 st.success(f"Added {first_name} {family_name} to {selected_comp} ✅")
                 msg = f"New Addition Request - Myshurance:\nCompany: {selected_comp}\nName: {first_name} {family_name}\nStaff ID: {staff_id}\nNational ID: {national_id}\nPlan: {plan}\nMobile: {mobile}"
                 st.session_state["last_wa_msg"] = msg
@@ -274,7 +269,7 @@ with tab2:
                 with open(os.path.join(PHOTOS_DIR, photo_name), "wb") as f:
                     f.write(d_photo.getbuffer())
                 new_row = {"Staff ID": d_staff, "* First Name": d_first, "* Family Name": d_family, "* Dependency": "", "* Gender": "", "* Date of Birth": "", "* Plan": "", "* Mobile Number": "", "Email ID": "", "* IBAN/Account Number": "", "* National ID": d_national}
-                save_to_sheet("deletion ", new_row)
+                save_to_sheet_gs("deletion", new_row)
                 st.success(f"Deleted {d_first} {d_family} ✅")
                 msg = f"Deletion Request - Myshurance:\nName: {d_first} {d_family}\nStaff ID: {d_staff}\nNational ID: {d_national}\nReason: {d_reason}\nDamaged card photo saved."
                 st.session_state["last_wa_msg"] = msg
@@ -305,7 +300,7 @@ with tab3:
                 st.error("❌ New Plan لازم تكون مختلفة عن Old Plan")
             else:
                 new_row = {"Staff ID": u_staff, "* First Name": u_first, "* Family Name": u_family, "* Dependency": "", "* Gender": "", "* Date of Birth": "", "* Plan": f"{old_plan} -> {new_plan}", "* Mobile Number": "", "Email ID": "", "* IBAN/Account Number": "", "* National ID": u_national}
-                save_to_sheet("up grade ", new_row)
+                save_to_sheet_gs("up grade", new_row)
                 st.success(f"Upgraded {u_first} {u_family} from {old_plan} to {new_plan} ✅")
                 msg = f"Upgrade Request - Myshurance:\nName: {u_first} {u_family}\nStaff ID: {u_staff}\nNational ID: {u_national}\nFrom: {old_plan} To: {new_plan}\nReason: {u_reason}"
                 st.session_state["last_wa_msg"] = msg
@@ -333,8 +328,7 @@ with tab4:
             else:
                 new_id = f"AP-{len(df_appr)+1:04d}"
                 new_appr = {"ID": new_id, "Name": a_name, "National ID": a_national, "Type": a_type, "Provider": a_provider, "Amount": a_amount, "Status": "Pending", "Date": datetime.now().strftime("%Y-%m-%d %H:%M")}
-                df_appr = pd.concat([df_appr, pd.DataFrame([new_appr])], ignore_index=True)
-                save_approvals(df_appr)
+                save_to_sheet_gs("approvals", new_appr)
                 st.success(f"Approval {new_id} created - Pending ✅")
                 msg = f"Approval Request - Myshurance:\nID: {new_id}\nName: {a_name}\nType: {a_type}\nProvider: {a_provider}\nAmount: {a_amount}\nStatus: Pending"
                 st.session_state["last_wa_msg"] = msg
@@ -354,12 +348,12 @@ with tab4:
             col_a, col_b = st.columns(2)
             if col_a.button("✅ Approve", use_container_width=True, key="approve_btn"):
                 df_appr.loc[df_appr["ID"] == selected_id, "Status"] = "Approved"
-                save_approvals(df_appr)
+                save_approvals_gs(df_appr)
                 st.success(f"{selected_id} Approved ✅")
                 st.rerun()
             if col_b.button("❌ Reject", use_container_width=True, key="reject_btn"):
                 df_appr.loc[df_appr["ID"] == selected_id, "Status"] = "Rejected"
-                save_approvals(df_appr)
+                save_approvals_gs(df_appr)
                 st.error(f"{selected_id} Rejected")
                 st.rerun()
 
