@@ -7,6 +7,52 @@ import urllib.parse
 
 st.set_page_config(page_title="Myshurance - Hub", layout="wide")
 
+# --- PDF CARD FUNCTION ---
+def generate_card_pdf(name, staff_id, national_id, plan, dependency, company="Myshurance"):
+    from reportlab.lib.pagesizes import landscape, A6
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.utils import ImageReader
+    buffer = io.BytesIO()
+    # كارت بالعرض
+    w, h = landscape(A6)  # 420 x 297 تقريبا
+    c = canvas.Canvas(buffer, pagesize=landscape(A6))
+    # خلفية
+    c.setFillColor(HexColor("#0B2C4A"))
+    c.rect(0, 0, w, h, fill=1, stroke=0)
+    # شريط ذهبي
+    c.setFillColor(HexColor("#C9A227"))
+    c.rect(0, h-8, w, 8, fill=1, stroke=0)
+    # اسم الشركة
+    c.setFillColor(HexColor("#FFFFFF"))
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(20, h-35, "MYSHURANCE")
+    c.setFont("Helvetica", 9)
+    c.drawString(20, h-48, "Health Insurance Card  |  TPA")
+    # بيانات العضو
+    c.setFillColor(HexColor("#FFFFFF"))
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(20, h-80, f"{name}")
+    c.setFont("Helvetica", 10)
+    c.drawString(20, h-100, f"Staff ID: {staff_id}")
+    c.drawString(20, h-115, f"National ID: {national_id}")
+    c.drawString(20, h-130, f"Plan: {plan}  |  {dependency}")
+    c.drawString(20, h-145, f"Company: {company}")
+    # رقم الكارت والصلاحية
+    c.setFont("Helvetica", 8)
+    c.setFillColor(HexColor("#C9A227"))
+    c.drawString(20, 25, f"Card No: MS-{str(national_id)[-6:] if national_id else '000000'}  |  Valid: 2026")
+    c.drawString(20, 12, "In case of emergency call HR / Myshurance Hotline")
+    # دائرة زخرفية
+    c.setFillColor(HexColor("#1A4A6E"))
+    c.circle(w-30, 35, 28, fill=1, stroke=0)
+    c.setFillColor(HexColor("#FFFFFF"))
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(w-30, 32, "MS")
+    c.save()
+    buffer.seek(0)
+    return buffer
+
 # --- LOGIN ---
 APP_USERNAME = "admin"
 APP_PASSWORD = "myshurance123"
@@ -21,7 +67,6 @@ if "emp_national_id" not in st.session_state:
 PHOTOS_DIR = "damaged_cards"
 os.makedirs(PHOTOS_DIR, exist_ok=True)
 
-# --- GOOGLE SHEETS CONNECTION ---
 @st.cache_resource
 def get_gs_client():
     import gspread
@@ -44,15 +89,13 @@ def load_sheet_gs(name):
         df = df.dropna(how="all")
         df = df[~(df.astype(str).apply(lambda x: "".join(x).strip()=="", axis=1))]
         return df
-    except Exception as e:
+    except:
         return pd.DataFrame()
 
-# --- LOGIN SCREEN ---
 if not st.session_state["logged_in"]:
     st.title("🔐 Myshurance - Login")
     st.caption("Admin or Employee - اختار نوع الدخول")
     login_type = st.radio("Login as:", ["👨‍💼 Admin", "👤 Employee - الموظف"], horizontal=True)
-
     if login_type == "👨‍💼 Admin":
         with st.form("login_form"):
             u = st.text_input("Username")
@@ -81,14 +124,13 @@ if not st.session_state["logged_in"]:
                     if df_check.empty:
                         st.error("No data yet")
                     else:
-                        # دور على الرقم القومي في أي عمود اسمه National ID
                         col = None
                         for c in df_check.columns:
                             if "National" in c:
                                 col = c
                                 break
                         if col is None:
-                            st.error("Sheet error - National ID column not found")
+                            st.error("Sheet error")
                         else:
                             found = df_check[df_check[col].astype(str).str.strip() == emp_id.strip()]
                             if found.empty:
@@ -102,7 +144,6 @@ if not st.session_state["logged_in"]:
         st.info("الموظف بيدخل بالرقم القومي بس، من غير باسورد")
     st.stop()
 
-# --- LOGOUT ---
 def do_logout():
     st.session_state["logged_in"] = False
     st.session_state["role"] = None
@@ -115,12 +156,10 @@ if st.session_state.get("role") == "employee":
     emp_id = st.session_state["emp_national_id"]
     st.title("👤 My Insurance - بياناتي")
     st.caption(f"National ID: {emp_id}")
-
     df_add = load_sheet_gs("addition")
     df_del = load_sheet_gs("deletion")
     df_upg = load_sheet_gs("up grade")
     df_appr = load_sheet_gs("approvals")
-
     def find_by_nid(df, nid):
         if df.empty:
             return pd.DataFrame()
@@ -132,60 +171,48 @@ if st.session_state.get("role") == "employee":
         if col is None:
             return pd.DataFrame()
         return df[df[col].astype(str).str.strip() == nid.strip()]
-
     my_data = find_by_nid(df_add, emp_id)
     my_del = find_by_nid(df_del, emp_id)
     my_upg = find_by_nid(df_upg, emp_id)
     my_appr = find_by_nid(df_appr, emp_id)
-
     if my_data.empty:
         st.error("No data found")
         st.stop()
-
-    # بياناتي
     st.subheader("📋 My Card Data - بيانات الكارت")
-    # اعرض أول صف بس
     row = my_data.iloc[0]
-    c1, c2, c3 = st.columns(3)
-    # حاول تجيب الاسم والخطة
     fname = row.get("* First Name", row.get("First Name", ""))
     lname = row.get("* Family Name", row.get("Family Name", ""))
     plan = row.get("* Plan", row.get("Plan", ""))
     dep = row.get("* Dependency", row.get("Dependency", ""))
+    staff = row.get("Staff ID", "")
+    c1, c2, c3 = st.columns(3)
     c1.metric("Name", f"{fname} {lname}")
     c2.metric("Plan", str(plan))
     c3.metric("Dependency", str(dep))
     st.dataframe(my_data, use_container_width=True)
-
+    # زرار طباعة الكارت للموظف
+    st.subheader("🪪 My Card - كارت التأمين")
+    pdf_buf = generate_card_pdf(f"{fname} {lname}", staff, emp_id, plan, dep)
+    st.download_button("Download My Card PDF 🪪", data=pdf_buf, file_name=f"Card_{emp_id}.pdf", mime="application/pdf", use_container_width=True)
     st.divider()
     st.subheader("✅ My Approvals - موافقاتي")
     if my_appr.empty:
-        st.info("No approvals yet - مفيش موافقات لسه")
+        st.info("No approvals yet")
     else:
         st.dataframe(my_appr, use_container_width=True)
-        # عد الحالات
-        if "Status" in my_appr.columns:
-            cc1, cc2, cc3 = st.columns(3)
-            cc1.metric("Pending", len(my_appr[my_appr["Status"]=="Pending"]))
-            cc2.metric("Approved", len(my_appr[my_appr["Status"]=="Approved"]))
-            cc3.metric("Rejected", len(my_appr[my_appr["Status"]=="Rejected"]))
-
     st.divider()
     st.subheader("⬆️ My Upgrades")
     if my_upg.empty:
         st.info("No upgrades")
     else:
         st.dataframe(my_upg, use_container_width=True)
-
     st.divider()
     st.subheader("➖ My Deletion Requests")
     if my_del.empty:
         st.info("No deletion requests")
     else:
         st.dataframe(my_del, use_container_width=True)
-
-    st.divider()
-    st.info("لو فيه بيانات غلط، كلم الـ HR بتاع شركتك - انت تقدر تشوف بس، مش تعدل")
+    st.info("لو فيه بيانات غلط، كلم الـ HR - انت تقدر تشوف بس، مش تعدل")
     st.stop()
 
 # ================= ADMIN PORTAL =================
@@ -209,18 +236,15 @@ def save_approvals_gs(df):
     for _, r in df.iterrows():
         ws.append_row([str(x) for x in r.tolist()])
 
-# --- WhatsApp ---
 st.sidebar.header("📱 WhatsApp Settings")
 wa_number = st.sidebar.text_input("HR / Company WhatsApp Number", placeholder="2010xxxxxxxx", value="")
 st.sidebar.caption("الرقم اللي هيتبعتله التنبيه، بكود الدولة من غير +")
-
 def wa_link(message):
     if not wa_number:
         return None
     clean_number = wa_number.strip().replace("+", "").replace(" ", "")
     encoded = urllib.parse.quote(message)
     return f"https://wa.me/{clean_number}?text={encoded}"
-
 def show_wa_button(message, label="Send on WhatsApp 📱"):
     link = wa_link(message)
     if link:
@@ -239,7 +263,6 @@ if df_comp.empty:
     df_comp = pd.DataFrame(columns=["Company Name", "HR Contact", "HR Phone", "Plan", "Members Count", "Created Date"])
 
 pending = len(df_appr[df_appr["Status"] == "Pending"]) if not df_appr.empty and "Status" in df_appr.columns else 0
-
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 col1.metric("Companies", len(df_comp))
 col2.metric("Addition", len(df_add))
@@ -247,9 +270,7 @@ col3.metric("Deletion", len(df_del))
 col4.metric("Upgrade", len(df_upg))
 col5.metric("Pending Approvals", pending)
 col6.metric("Total Requests", len(df_add) + len(df_del) + len(df_upg))
-
 st.divider()
-
 if "last_wa_msg" in st.session_state:
     st.success("آخر طلب اتسجل ✅ - ابعته واتساب من هنا:")
     show_wa_button(st.session_state["last_wa_msg"], "Send Last Request on WhatsApp")
@@ -279,9 +300,7 @@ if st.button("Download Excel Report 📥", use_container_width=True):
             df_upg.to_excel(writer, sheet_name="Upgrade", index=False)
     output.seek(0)
     st.download_button(label="Click here to save the file 💾", data=output, file_name=f"Myshurance_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-
 st.divider()
-
 st.subheader("🔍 Search Member")
 search = st.text_input("Search by First Name, Family Name, Staff ID or National ID", placeholder="مثال: Ahmed أو 2980101...")
 if search:
@@ -366,6 +385,24 @@ with tab1:
         st.info("No addition requests yet")
     else:
         st.dataframe(df_add, use_container_width=True)
+        st.divider()
+        st.subheader("🪪 Print Member Card - طباعة الكارت")
+        # اختار عضو بالرقم القومي
+        nid_col = None
+        for c in df_add.columns:
+            if "National" in c:
+                nid_col = c
+                break
+        if nid_col:
+            selected_nid = st.selectbox("Select Member by National ID", df_add[nid_col].astype(str).tolist())
+            sel_row = df_add[df_add[nid_col].astype(str) == selected_nid].iloc[0]
+            s_fname = sel_row.get("* First Name", "")
+            s_lname = sel_row.get("* Family Name", "")
+            s_plan = sel_row.get("* Plan", "")
+            s_dep = sel_row.get("* Dependency", "")
+            s_staff = sel_row.get("Staff ID", "")
+            pdf_buf = generate_card_pdf(f"{s_fname} {s_lname}", s_staff, selected_nid, s_plan, s_dep, selected_comp)
+            st.download_button(f"Download Card for {s_fname} {s_lname} 🪪", data=pdf_buf, file_name=f"Card_{selected_nid}.pdf", mime="application/pdf", use_container_width=True)
 
 with tab2:
     st.subheader("Delete Member - لازم صورة الكارت التالف")
