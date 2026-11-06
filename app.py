@@ -265,6 +265,37 @@ if df_comp.empty:
     df_comp = pd.DataFrame(columns=["Company Name", "HR Contact", "HR Phone", "Plan", "Members Count", "Created Date"])
 
 pending = len(df_appr[df_appr["Status"] == "Pending"]) if not df_appr.empty and "Status" in df_appr.columns else 0
+# --- EXPIRY & PENDING ALERTS ---
+st.subheader("🔔 Alerts - تنبيهات")
+alert_found = False
+# تنبيه موافقات متعلقة
+if not df_appr.empty and "Status" in df_appr.columns and "Date" in df_appr.columns:
+    try:
+        df_appr["_d"] = pd.to_datetime(df_appr["Date"], errors="coerce")
+        old_pending = df_appr[(df_appr["Status"]=="Pending") & (df_appr["_d"] < pd.Timestamp.now() - pd.Timedelta(days=2))]
+        if not old_pending.empty:
+            st.warning(f"⚠️ فيه {len(old_pending)} موافقة Pending بقالها أكتر من يومين - لازم تتراجع!")
+            st.dataframe(old_pending.drop(columns=["_d"]), use_container_width=True)
+            alert_found = True
+    except:
+        pass
+
+# تنبيه كروت هتخلص - لو فيه عمود Expiry
+if not df_add.empty and any("Expir" in c or "expir" in c for c in df_add.columns):
+    exp_col = [c for c in df_add.columns if "Expir" in c or "expir" in c][0]
+    try:
+        df_add["_exp"] = pd.to_datetime(df_add[exp_col], errors="coerce")
+        soon = df_add[(df_add["_exp"] >= pd.Timestamp.now()) & (df_add["_exp"] <= pd.Timestamp.now() + pd.Timedelta(days=30))]
+        if not soon.empty:
+            st.error(f"🚨 فيه {len(soon)} كارت هيخلص خلال 30 يوم!")
+            st.dataframe(soon.drop(columns=["_exp"]), use_container_width=True)
+            alert_found = True
+    except:
+        pass
+
+if not alert_found:
+    st.success("✅ مفيش تنبيهات - كل حاجة تمام")
+st.divider()
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 col1.metric("Companies", len(df_comp))
 col2.metric("Addition", len(df_add))
@@ -370,12 +401,13 @@ with tab1:
         email = c1.text_input("Email ID")
         iban = c2.text_input("* IBAN / Account Number")
         national_id = c1.text_input("* National ID")
+        expiry_date = c2.date_input("Card Expiry Date")
         submitted = st.form_submit_button("Save Addition ✅", use_container_width=True)
         if submitted:
             if not first_name or not family_name or not national_id:
                 st.error("First Name و Family Name و National ID مطلوبين")
             else:
-                new_row = {"Staff ID": staff_id, "* First Name": first_name, "* Family Name": family_name, "* Dependency": dependency, "* Gender": gender, "* Date of Birth": str(dob), "* Plan": plan, "* Mobile Number": mobile, "Email ID": email, "* IBAN/Account Number": iban, "* National ID": national_id}
+                new_row = {"Staff ID": staff_id, "* First Name": first_name, "* Family Name": family_name, "* Dependency": dependency, "* Gender": gender, "* Date of Birth": str(dob), "* Plan": plan, "* Mobile Number": mobile, "Email ID": email, "* IBAN/Account Number": iban, "* National ID": national_id, "Card Expiry Date": str(expiry_date)}: national_id}
                 save_to_sheet_gs("addition", new_row)
                 st.success(f"Added {first_name} {family_name} to {selected_comp} ✅")
                 msg = f"New Addition Request - Myshurance:\nCompany: {selected_comp}\nName: {first_name} {family_name}\nStaff ID: {staff_id}\nNational ID: {national_id}\nPlan: {plan}\nMobile: {mobile}"
