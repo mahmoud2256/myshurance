@@ -419,7 +419,7 @@ with tab1:
         st.info("No addition requests yet")
     else:
         st.dataframe(df_add, use_container_width=True)
-        st.divider()
+    st.divider()
         st.subheader("🪪 Print Member Card - طباعة الكارت")
         # اختار عضو بالرقم القومي
         nid_col = None
@@ -568,7 +568,7 @@ with tab5:
             pass
     else:
         st.info("No approvals yet for chart")
-            st.divider()
+    st.divider()
     st.subheader("📅 Monthly Report - تقرير شهري")
     sel_month = st.selectbox("Select Month", ["Current Month - الشهر الحالي", "All Time - كل الوقت"])
     if st.button("Generate Monthly Report 📊", use_container_width=True):
