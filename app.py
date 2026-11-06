@@ -7,7 +7,7 @@ import urllib.parse
 
 st.set_page_config(page_title="Myshurance - Hub", layout="wide")
 st.title("Myshurance Hub")
-st.caption("Census List - Companies / Addition / Deletion / Upgrade / Approvals")
+st.caption("Census List - Companies / Addition / Deletion / Upgrade / Approvals / Analytics")
 
 FILE = "Census_List.xlsx"
 APPROVALS_FILE = "approvals.xlsx"
@@ -112,7 +112,6 @@ if "last_wa_msg" in st.session_state:
         st.rerun()
     st.divider()
 
-# --- EXPORT ---
 st.subheader("📥 Export Report")
 export_type = st.selectbox("Choose what to export", ["All - Addition + Deletion + Upgrade", "Addition Only", "Deletion Only", "Upgrade Only", "Approvals Only", "Companies Only"])
 if st.button("Download Excel Report 📥", use_container_width=True):
@@ -137,7 +136,6 @@ if st.button("Download Excel Report 📥", use_container_width=True):
 
 st.divider()
 
-# --- SEARCH ---
 st.subheader("🔍 Search Member")
 search = st.text_input("Search by First Name, Family Name, Staff ID or National ID", placeholder="مثال: Ahmed أو 2980101...")
 if search:
@@ -162,7 +160,7 @@ if search:
             st.dataframe(result, use_container_width=True)
     st.divider()
 
-tab0, tab1, tab2, tab3, tab4 = st.tabs(["🏢 Companies", "➕ Addition", "➖ Deletion", "⬆️ Upgrade", "✅ Approvals"])
+tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏢 Companies", "➕ Addition", "➖ Deletion", "⬆️ Upgrade", "✅ Approvals", "📊 Analytics"])
 
 with tab0:
     st.subheader("Add New Company")
@@ -188,21 +186,10 @@ with tab0:
     if df_comp.empty:
         st.info("No companies yet - ضيف أول شركة، زي 【entity-Allianz¦canonical_name=Allianz】")
     else:
-        cols = st.columns(3)
-        for i, row in df_comp.iterrows():
-            with cols[list(df_comp.index).index(i) % 3]:
-                with st.container(border=True):
-                    st.markdown(f"### {row['Company Name']}")
-                    st.write(f"HR: **{row['HR Contact']}**")
-                    st.write(f"Phone: **{row['HR Phone']}**")
-                    st.write(f"Plan: **{row['Plan']}**")
-                    st.write(f"Members: **{row['Members Count']}**")
-        st.divider()
         st.dataframe(df_comp, use_container_width=True)
 
 with tab1:
     st.subheader("Add New Member")
-    # اختيار الشركة هنا
     comp_options = df_comp["Company Name"].tolist() if not df_comp.empty else ["No Company"]
     selected_comp = st.selectbox("Select Company", comp_options)
     with st.form("add_form", clear_on_submit=True):
@@ -346,3 +333,38 @@ with tab4:
                 save_approvals(df_appr)
                 st.error(f"{selected_id} Rejected")
                 st.rerun()
+
+with tab5:
+    st.subheader("📊 Analytics - نظرة عامة")
+    # Members by Plan
+    if not df_add.empty and "* Plan" in df_add.columns:
+        st.markdown("### Members by Plan")
+        st.bar_chart(df_add["* Plan"].value_counts())
+    else:
+        st.info("No members yet for Plan chart")
+
+    # Members by Dependency
+    if not df_add.empty and "* Dependency" in df_add.columns:
+        st.markdown("### Members by Dependency")
+        st.bar_chart(df_add["* Dependency"].value_counts())
+
+    # Approvals by Status
+    if not df_appr.empty and "Status" in df_appr.columns:
+        st.markdown("### Approvals by Status")
+        st.bar_chart(df_appr["Status"].value_counts())
+        st.markdown("### Approvals Total Amount by Status")
+        try:
+            st.bar_chart(df_appr.groupby("Status")["Amount"].sum())
+        except:
+            pass
+    else:
+        st.info("No approvals yet for chart")
+
+    # Companies Members
+    if not df_comp.empty and "Members Count" in df_comp.columns:
+        st.markdown("### Companies by Members Count")
+        try:
+            chart_df = df_comp.set_index("Company Name")["Members Count"]
+            st.bar_chart(chart_df)
+        except:
+            st.dataframe(df_comp)
