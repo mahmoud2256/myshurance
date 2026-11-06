@@ -6,6 +6,35 @@ import io
 import urllib.parse
 
 st.set_page_config(page_title="Myshurance - Hub", layout="wide")
+
+# --- LOGIN ---
+# غيّر الباسورد من هنا لو حابب
+APP_USERNAME = "admin"
+APP_PASSWORD = "myshurance123"
+
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    st.title("🔐 Myshurance - Login")
+    st.caption("Please login to continue")
+    with st.form("login_form"):
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
+        login_btn = st.form_submit_button("Login", use_container_width=True)
+        if login_btn:
+            if u == APP_USERNAME and p == APP_PASSWORD:
+                st.session_state["logged_in"] = True
+                st.success("Welcome ✅")
+                st.rerun()
+            else:
+                st.error("❌ Wrong username or password")
+    st.info("Default: admin / myshurance123 - غيّرها من أول الكود")
+    st.stop()
+
+# --- Logout Button ---
+st.sidebar.button("Logout 🚪", on_click=lambda: st.session_state.update({"logged_in": False}))
+
 st.title("Myshurance Hub")
 st.caption("Census List - Companies / Addition / Deletion / Upgrade / Approvals / Analytics")
 
@@ -15,8 +44,8 @@ COMPANIES_FILE = "companies.xlsx"
 PHOTOS_DIR = "damaged_cards"
 os.makedirs(PHOTOS_DIR, exist_ok=True)
 
-st.sidebar.header("📱 WhatsApp Settings")
-wa_number = st.sidebar.text_input("HR / Company WhatsApp Number", placeholder="2010xxxxxxxx", value="")
+st.sidebar.header("📱 【entity-WhatsApp¦canonical_name=WhatsApp】 Settings")
+wa_number = st.sidebar.text_input("HR / Company 【entity-WhatsApp¦canonical_name=WhatsApp】 Number", placeholder="2010xxxxxxxx", value="")
 st.sidebar.caption("الرقم اللي هيتبعتله التنبيه، بكود الدولة من غير +")
 
 def wa_link(message):
@@ -336,19 +365,14 @@ with tab4:
 
 with tab5:
     st.subheader("📊 Analytics - نظرة عامة")
-    # Members by Plan
     if not df_add.empty and "* Plan" in df_add.columns:
         st.markdown("### Members by Plan")
         st.bar_chart(df_add["* Plan"].value_counts())
     else:
         st.info("No members yet for Plan chart")
-
-    # Members by Dependency
     if not df_add.empty and "* Dependency" in df_add.columns:
         st.markdown("### Members by Dependency")
         st.bar_chart(df_add["* Dependency"].value_counts())
-
-    # Approvals by Status
     if not df_appr.empty and "Status" in df_appr.columns:
         st.markdown("### Approvals by Status")
         st.bar_chart(df_appr["Status"].value_counts())
@@ -359,8 +383,6 @@ with tab5:
             pass
     else:
         st.info("No approvals yet for chart")
-
-    # Companies Members
     if not df_comp.empty and "Members Count" in df_comp.columns:
         st.markdown("### Companies by Members Count")
         try:
