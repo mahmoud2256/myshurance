@@ -77,8 +77,10 @@ def get_gs_client():
 
 def get_sheet():
     client = get_gs_client()
+    if "GOOGLE_SHEET_ID" in st.secrets:
+        return client.open_by_key(st.secrets["GOOGLE_SHEET_ID"])
     return client.open_by_url(st.secrets["GOOGLE_SHEET_URL"])
-
+    
 def load_sheet_gs(name):
     try:
         ws = get_sheet().worksheet(name)
