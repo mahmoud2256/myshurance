@@ -163,6 +163,46 @@ TRANSLATIONS = {
         "all_companies": "كل الشركات",
         "no_companies": "مفيش شركات لسه - دوس على زرار إضافة العملاء الأربعة فوق",
         "approve_reject": "قبول / رفض",
+        "my_title": "👤 تأميني - بياناتي",
+        "my_card_data": "📋 بيانات الكارت",
+        "my_card": "🪪 الكارت بتاعي",
+        "my_appr": "✅ موافقاتي",
+        "my_upg": "⬆ ترقياتي",
+        "my_del": "➖ طلبات الحذف بتاعتي",
+        "my_note": "لو فيه بيانات غلط، كلم الـ HR - انت تقدر تشوف بس، مش تعدل",
+        "wa_first": "اكتب رقم الواتساب في الشريط الجانبي الأول",
+        "scan_ok_full": "تم القراءة ✅ - الاسم:",
+        "scan_nid_lbl": "الرقم القومي:",
+        "scan_dob_lbl": "الميلاد:",
+        "scan_gender_lbl": "النوع:",
+        "scan_name_ar_note": "✍️ الاسم بالعربي اتقرا مكسر من الصورة - اكتبه انت يدوي بالعربي أو بالإنجليزي في الفورم تحت، باقي البيانات اتملت لوحدها من الرقم القومي.",
+        "print_card": "🪪 طباعة كارت العضو",
+        "del_title": "حذف عضو - لازم صورة الكارت التالف",
+        "del_req": "الاسم الأول واسم العائلة والرقم القومي مطلوبين",
+        "del_no_photo": "❌ مينفعش حذف من غير صورة الكارت التالف",
+        "upg_req": "الاسم الأول واسم العائلة والرقم القومي مطلوبين",
+        "upg_same": "❌ الخطة الجديدة لازم تكون مختلفة عن القديمة",
+        "appr_req": "الاسم والرقم القومي مطلوبين",
+        "analytics_title": "📊 تحليلات - نظرة عامة",
+        "monthly_title": "📅 تقرير شهري",
+        "monthly_ok": "ده التقرير اللي ممكن تبعته للشركة كل أول شهر ✅",
+        "del_school": "اختار الشركة",
+        "del_search": "دوّر بالاسم أو الرقم القومي أو رقم الموظف",
+        "del_choose": "اختار العضو اللي هتحذفه",
+        "del_type": "نوع الحذف",
+        "del_replacement": "استبدال - فيه بديل مكانه",
+        "del_final": "حذف نهائي - مفيش بديل",
+        "del_date": "تاريخ الحذف",
+        "del_date_hint": "تاريخ الحذف ميبقاش في المستقبل، وأقصى حاجة 30 يوم فاتوا.",
+        "del_date_future": "❌ تاريخ الحذف مينفعش يبقى في المستقبل",
+        "del_date_old": "❌ تاريخ الحذف أقصاه 30 يوم فاتوا - أقدم من كده مينفعش",
+        "del_confirm": "تأكيد الحذف 🗑",
+        "del_reason": "سبب الحذف",
+        "del_photo": "📷 صورة الكارت التالف - إجباري",
+        "del_no_members": "مفيش أعضاء في الشركة دي",
+        "del_no_match": "مفيش عضو مطابق للبحث",
+        "del_done": "تم الحذف ✅ واتنقل للشيت النهائي",
+
     },
     "en": {
         "login_title": "🔐 Myshurance - Login",
@@ -281,6 +321,46 @@ TRANSLATIONS = {
         "all_companies": "All Companies",
         "no_companies": "No companies yet - Click Add the 4 Ready Clients above",
         "approve_reject": "Approve / Reject",
+        "my_title": "👤 My Insurance - My Data",
+        "my_card_data": "📋 My Card Data",
+        "my_card": "🪪 My Card",
+        "my_appr": "✅ My Approvals",
+        "my_upg": "⬆ My Upgrades",
+        "my_del": "➖ My Deletion Requests",
+        "my_note": "If data is wrong, contact HR - You can view only, not edit",
+        "wa_first": "Enter WhatsApp number in the Sidebar first",
+        "scan_ok_full": "Read Successfully ✅ - Name:",
+        "scan_nid_lbl": "National ID:",
+        "scan_dob_lbl": "DOB:",
+        "scan_gender_lbl": "Gender:",
+        "scan_name_ar_note": "✍️ Arabic name was read broken from the photo - Type it manually in Arabic or English in the form below, other data was filled from National ID.",
+        "print_card": "🪪 Print Member Card",
+        "del_title": "Delete Member - Damaged Card Photo Required",
+        "del_req": "First Name, Family Name and National ID are required",
+        "del_no_photo": "❌ Cannot delete without damaged card photo",
+        "upg_req": "First Name, Family Name and National ID are required",
+        "upg_same": "❌ New Plan must be different from Old Plan",
+        "appr_req": "Name and National ID are required",
+        "analytics_title": "📊 Analytics - Overview",
+        "monthly_title": "📅 Monthly Report",
+        "monthly_ok": "This is the report you can send to the company at the start of each month ✅",
+        "del_school": "Select Company",
+        "del_search": "Search by Name, National ID or Staff ID",
+        "del_choose": "Select Member to Delete",
+        "del_type": "Deletion Type",
+        "del_replacement": "Replacement - There is a replacement",
+        "del_final": "Final Deletion - No replacement",
+        "del_date": "Deletion Date",
+        "del_date_hint": "Deletion date cannot be in the future, and max 30 days in the past.",
+        "del_date_future": "❌ Deletion date cannot be in the future",
+        "del_date_old": "❌ Deletion date max 30 days in the past - Older is not allowed",
+        "del_confirm": "Confirm Deletion 🗑",
+        "del_reason": "Reason for Deletion",
+        "del_photo": "📷 Damaged Card Photo - Required",
+        "del_no_members": "No members in this company",
+        "del_no_match": "No matching member",
+        "del_done": "Deleted ✅ and moved to final sheet",
+
     }
 }
 def T(k):
@@ -1048,7 +1128,7 @@ def do_logout():
 if st.session_state.get("role") == "employee":
     st.sidebar.button(T("logout"), on_click=do_logout)
     emp_id = st.session_state["emp_national_id"]
-    st.title("👤 My Insurance - بياناتي")
+    st.title(T("my_title"))
     st.caption(f"National ID: {emp_id}")
     df_add = load_sheet_gs("addition")
     df_del = load_sheet_gs("deletion")
@@ -1072,7 +1152,7 @@ if st.session_state.get("role") == "employee":
     if my_data.empty:
         st.error("No data found")
         st.stop()
-    st.subheader("📋 My Card Data - بيانات الكارت")
+    st.subheader(T("my_card_data"))
     row = my_data.iloc[0]
     fname = row.get("* First Name", row.get("First Name", ""))
     lname = row.get("* Family Name", row.get("Family Name", ""))
@@ -1084,28 +1164,28 @@ if st.session_state.get("role") == "employee":
     c2.metric("Plan", str(plan))
     c3.metric("Dependency", str(dep))
     st.dataframe(my_data, use_container_width=True)
-    st.subheader("🪪 My Card - كارت التأمين")
+    st.subheader(T("my_card"))
     pdf_buf = generate_card_pdf(f"{fname} {lname}", staff, emp_id, plan, dep)
     st.download_button("Download My Card PDF 🪪", data=pdf_buf, file_name=f"Card_{emp_id}.pdf", mime="application/pdf", use_container_width=True)
     st.divider()
-    st.subheader("✅ My Approvals - موافقاتي")
+    st.subheader(T("my_appr"))
     if my_appr.empty:
         st.info("No approvals yet")
     else:
         st.dataframe(my_appr, use_container_width=True)
     st.divider()
-    st.subheader("⬆ My Upgrades")
+    st.subheader(T("my_upg"))
     if my_upg.empty:
         st.info("No upgrades")
     else:
         st.dataframe(my_upg, use_container_width=True)
     st.divider()
-    st.subheader("➖ My Deletion Requests")
+    st.subheader(T("my_del"))
     if my_del.empty:
         st.info("No deletion requests")
     else:
         st.dataframe(my_del, use_container_width=True)
-    st.info("لو فيه بيانات غلط، كلم الـ HR - انت تقدر تشوف بس، مش تعدل")
+    st.info(T("my_note"))
     st.stop()
 
 # ================= ADMIN PORTAL =================
@@ -1143,7 +1223,7 @@ def show_wa_button(message, label="Send on WhatsApp 📱"):
     if link:
         st.markdown(f"### [📱 {label} - دوس هنا]({link})")
     else:
-        st.warning("اكتب رقم الواتساب في الـ Sidebar الأول")
+        st.warning(T("wa_first"))
 
 df_add = load_sheet_gs("addition")
 df_del = load_sheet_gs("deletion")
@@ -1308,9 +1388,9 @@ with tab1:
                 st.session_state["scan_done"] = True
             if res["name"] or res.get("national_id") or res.get("card_no"):
                 if res.get("national_id"):
-                    st.success(f"تم القراءة ✅ - الاسم: {res['name'] or 'كمل الاسم يدوي'} | الرقم القومي: {res['national_id']} | الميلاد: {res['dob']} | النوع: {res.get('gender','')}")
+                    st.success(f"{T('scan_ok_full')} {res['name'] or T('scan_name_ar_note')[:0] or '' } | {T('scan_nid_lbl')} {res['national_id']} | {T('scan_dob_lbl')} {res['dob']} | {T('scan_gender_lbl')} {res.get('gender','')} | {T('scan_card_no')} {res.get('card_no','')}")
                     if not res["name"]:
-                        st.info("✍️ الاسم بالعربي اتقرا مكسر من الصورة - اكتبه انت يدوي بالعربي أو بالإنجليزي في الفورم تحت، باقي البيانات اتملت لوحدها من الرقم القومي.")
+                        st.info(T("scan_name_ar_note"))
                 else:
                     st.success(f"{T('scan_ok')} - {res['name']} | {T('scan_card_no')}: {res.get('card_no','')}")
                     if res.get("card_no"):
@@ -1421,7 +1501,7 @@ with tab1:
     else:
         st.dataframe(df_add, use_container_width=True)
         st.divider()
-        st.subheader("🪪 Print Member Card - طباعة الكارت")
+        st.subheader(T("print_card"))
         nid_col = None
         for c in df_add.columns:
             if "National" in c:
@@ -1439,32 +1519,97 @@ with tab1:
             st.download_button(f"Download Card for {s_fname} {s_lname} 🪪", data=pdf_buf, file_name=f"Card_{selected_nid}.pdf", mime="application/pdf", use_container_width=True)
 
 with tab2:
-    st.subheader("Delete Member - لازم صورة الكارت التالف")
-    with st.form("del_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        d_staff = c1.text_input("Staff ID to Delete")
-        d_first = c1.text_input("* First Name")
-        d_family = c2.text_input("* Family Name")
-        d_national = c2.text_input("* National ID")
-        d_reason = st.text_area("Reason for Deletion")
-        d_photo = st.file_uploader("📷 صورة الكارت التالف - إجباري", type=["jpg", "jpeg", "png"])
-        d_submitted = st.form_submit_button("Confirm Deletion 🗑", use_container_width=True)
-        if d_submitted:
-            if not d_first or not d_family or not d_national:
-                st.error("First Name و Family Name و National ID مطلوبين")
-            elif d_photo is None:
-                st.error("❌ مينفعش حذف من غير صورة الكارت التالف")
+    st.subheader(T("del_title"))
+    # 1 - اختار الشركة
+    _del_companies = df_comp["Company Name"].astype(str).tolist() if not df_comp.empty and "Company Name" in df_comp.columns else []
+    if not _del_companies:
+        st.info(T("no_companies"))
+    else:
+        _del_comp = st.selectbox(T("del_school"), _del_companies, key="del_company")
+        # أعضاء الشركة دي بس - من شيت addition
+        _members = pd.DataFrame()
+        if not df_add.empty:
+            _comp_col = "Company" if "Company" in df_add.columns else None
+            if _comp_col:
+                _members = df_add[df_add[_comp_col].astype(str) == str(_del_comp)].copy()
             else:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                photo_name = f"{d_national}_{timestamp}.{d_photo.name.split('.')[-1]}"
-                with open(os.path.join(PHOTOS_DIR, photo_name), "wb") as f:
-                    f.write(d_photo.getbuffer())
-                new_row = {"Staff ID": d_staff, "* First Name": d_first, "* Family Name": d_family, "* Dependency": "", "* Gender": "", "* Date of Birth": "", "* Plan": "", "* Mobile Number": "", "Email ID": "", "* IBAN/Account Number": "", "* National ID": d_national}
-                save_to_sheet_gs("deletion", new_row)
-                st.success(f"Deleted {d_first} {d_family} ✅")
-                msg = f"Deletion Request - Myshurance:\nName: {d_first} {d_family}\nStaff ID: {d_staff}\nNational ID: {d_national}\nReason: {d_reason}\nDamaged card photo saved."
-                st.session_state["last_wa_msg"] = msg
-                st.rerun()
+                _members = df_add.copy()
+        if _members.empty:
+            st.info(T("del_no_members"))
+        else:
+            # 2 - دوّر بالاسم / الرقم القومي / رقم الموظف
+            _q = st.text_input(T("del_search"), placeholder="Ahmed / 2980101 / 123", key="del_search")
+            _filtered = _members
+            if _q:
+                _ql = _q.lower().strip()
+                _mask = _members.astype(str).apply(lambda row: row.str.lower().str.contains(_ql, na=False).any(), axis=1)
+                _filtered = _members[_mask]
+            if _filtered.empty:
+                st.warning(T("del_no_match"))
+            else:
+                # 3 - اختار العضو
+                def _label(r):
+                    _fn = r.get("* First Name", r.get("First Name", ""))
+                    _ln = r.get("* Family Name", r.get("Family Name", ""))
+                    _nid = r.get("* National ID", r.get("National ID", ""))
+                    _sid = r.get("Staff ID", "")
+                    return f"{_fn} {_ln} | {_nid} | {_sid}"
+                _opts = [_label(r) for _, r in _filtered.iterrows()]
+                _sel_label = st.selectbox(T("del_choose"), _opts, key="del_choose")
+                _sel_idx = _opts.index(_sel_label)
+                _sel_row = _filtered.iloc[_sel_idx]
+                st.dataframe(_filtered.iloc[[_sel_idx]], use_container_width=True)
+                # 4 - استبدال ولا حذف نهائي + تاريخ الحذف + صورة الكارت التالف
+                with st.form("del_form", clear_on_submit=True):
+                    c1, c2 = st.columns(2)
+                    _del_type = c1.radio(T("del_type"), [T("del_replacement"), T("del_final")], horizontal=True)
+                    _del_date = c2.date_input(T("del_date"), value=date.today())
+                    st.caption(T("del_date_hint"))
+                    _del_reason = st.text_area(T("del_reason"))
+                    _del_photo = st.file_uploader(T("del_photo"), type=["jpg", "jpeg", "png"])
+                    _d_sub = st.form_submit_button(T("del_confirm"), use_container_width=True)
+                    if _d_sub:
+                        _today = date.today()
+                        _delta = (_today - _del_date).days
+                        if _del_date > _today:
+                            st.error(T("del_date_future"))
+                        elif _delta > 30:
+                            st.error(T("del_date_old"))
+                        elif _del_photo is None:
+                            st.error(T("del_no_photo"))
+                        else:
+                            _timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            _nid_val = str(_sel_row.get("* National ID", _sel_row.get("National ID", "")))
+                            _photo_name = f"{_nid_val}_{_timestamp}.{_del_photo.name.split('.')[-1]}"
+                            with open(os.path.join(PHOTOS_DIR, _photo_name), "wb") as _f:
+                                _f.write(_del_photo.getbuffer())
+                            _new_row = {
+                                "Staff ID": _sel_row.get("Staff ID", ""),
+                                "* First Name": _sel_row.get("* First Name", _sel_row.get("First Name", "")),
+                                "* Family Name": _sel_row.get("* Family Name", _sel_row.get("Family Name", "")),
+                                "* Dependency": _sel_row.get("* Dependency", _sel_row.get("Dependency", "")),
+                                "* Gender": _sel_row.get("* Gender", _sel_row.get("Gender", "")),
+                                "* Date of Birth": _sel_row.get("* Date of Birth", _sel_row.get("Date of Birth", "")),
+                                "* Plan": _sel_row.get("* Plan", _sel_row.get("Plan", "")),
+                                "* Mobile Number": _sel_row.get("* Mobile Number", ""),
+                                "Email ID": _sel_row.get("Email ID", ""),
+                                "* IBAN/Account Number": _sel_row.get("* IBAN/Account Number", ""),
+                                "* National ID": _nid_val,
+                                "Company": _del_comp,
+                                "Deletion Type": _del_type,
+                                "Deletion Date": str(_del_date),
+                                "Reason": _del_reason,
+                                "Damaged Photo": _photo_name,
+                            }
+                            # الشيت النهائي للحذف - لو مش موجود هيتخلق لوحده
+                            try:
+                                save_to_sheet_gs("deletion", _new_row)
+                            except Exception:
+                                save_to_sheet_gs("deletion", _new_row)
+                            st.success(T("del_done"))
+                            _msg = f"Deletion Request - Myshurance:\nCompany: {_del_comp}\nName: {_new_row['* First Name']} {_new_row['* Family Name']}\nStaff ID: {_new_row['Staff ID']}\nNational ID: {_nid_val}\nType: {_del_type}\nDeletion Date: {_del_date}\nReason: {_del_reason}\nDamaged card photo saved."
+                            st.session_state["last_wa_msg"] = _msg
+                            st.rerun()
     st.divider()
     st.subheader("Deletion Requests")
     if df_del.empty:
@@ -1486,9 +1631,9 @@ with tab3:
         u_submitted = st.form_submit_button("Confirm Upgrade ⬆", use_container_width=True)
         if u_submitted:
             if not u_first or not u_family or not u_national:
-                st.error("First Name و Family Name و National ID مطلوبين")
+                st.error(T("del_req"))
             elif old_plan == new_plan:
-                st.error("❌ New Plan لازم تكون مختلفة عن Old Plan")
+                st.error(T("upg_same"))
             else:
                 new_row = {"Staff ID": u_staff, "* First Name": u_first, "* Family Name": u_family, "* Dependency": "", "* Gender": "", "* Date of Birth": "", "* Plan": f"{old_plan} -> {new_plan}", "* Mobile Number": "", "Email ID": "", "* IBAN/Account Number": "", "* National ID": u_national}
                 save_to_sheet_gs("up grade", new_row)
@@ -1516,7 +1661,7 @@ with tab4:
         a_sub = st.form_submit_button("Submit Approval ✅", use_container_width=True)
         if a_sub:
             if not a_name or not a_national:
-                st.error("Name و National ID مطلوبين")
+                st.error(T("appr_req"))
             else:
                 new_id = f"AP-{len(df_appr)+1:04d}"
                 new_appr = {"ID": new_id, "Name": a_name, "National ID": a_national, "Type": a_type, "Provider": a_provider, "Hospital": a_hospital, "Amount": a_amount, "Status": "Pending", "Date": datetime.now().strftime("%Y-%m-%d %H:%M")}
@@ -1550,7 +1695,7 @@ with tab4:
                 st.rerun()
 
 with tab5:
-    st.subheader("📊 Analytics - نظرة عامة")
+    st.subheader(T("analytics_title"))
     if not df_add.empty and "* Plan" in df_add.columns:
         st.markdown("### Members by Plan")
         st.bar_chart(df_add["* Plan"].value_counts())
@@ -1573,7 +1718,7 @@ with tab5:
     else:
         st.info("No approvals yet for chart")
         st.divider()
-    st.subheader("📅 Monthly Report - تقرير شهري")
+    st.subheader(T("monthly_title"))
     sel_month = st.selectbox("Select Month", ["Current Month - الشهر الحالي", "All Time - كل الوقت"])
     if st.button("Generate Monthly Report 📊", use_container_width=True):
         st.markdown("### Myshurance Monthly Summary")
@@ -1588,7 +1733,7 @@ with tab5:
                 st.write(f"💰 Total Approved Amount: {df_appr[df_appr['Status']=='Approved']['Amount'].astype(float).sum():,.0f}")
             except:
                 pass
-        st.success("ده التقرير اللي ممكن تبعته للشركة كل أول شهر ✅")
+        st.success(T("monthly_ok"))
     if not df_comp.empty and "Members Count" in df_comp.columns:
         st.markdown("### Companies by Members Count")
         try:
