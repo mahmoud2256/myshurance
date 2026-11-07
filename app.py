@@ -656,13 +656,7 @@ with tab2:
                                 new_row = {"Staff ID": s_staff, "* First Name": s_fname, "* Family Name": s_lname, "* Dependency": sel_row.get("* Dependency",""), "* Gender": sel_row.get("* Gender",""), "* Date of Birth": sel_row.get("* Date of Birth",""), "* Plan": s_plan, "* Mobile Number": sel_row.get("* Mobile Number",""), "Email ID": sel_row.get("Email ID",""), "* IBAN/Account Number": sel_row.get("* IBAN/Account Number",""), "* National ID": s_nid, "Company": sel_school_del, "Deletion Date": str(del_date), "Reason": del_reason, "Policy Number": _crow.get("Policy Number","") if ' _crow' in locals() else "", "Provider": _crow.get("Provider","") if '_crow' in locals() else ""}
                                 save_to_sheet_gs("deletion", new_row)
                                 st.success(f"تم حذف {s_fname} {s_lname} ✅ - الصف اتحول أوتوماتيك لشيت الحذف النهائي اللي هيتبعت لشركة التأمين")
-                                msg = f"Deletion Request - Myshurance:
-School: {sel_school_del}
-Name: {s_fname} {s_lname}
-Staff ID: {s_staff}
-National ID: {s_nid}
-Deletion Date: {del_date}
-Reason: {del_reason}"
+                                msg = f"Deletion Request - Myshurance:\nSchool: {sel_school_del}\nName: {s_fname} {s_lname}\nStaff ID: {s_staff}\nNational ID: {s_nid}\nDeletion Date: {del_date}\nReason: {del_reason}"
                                 st.session_state["last_wa_msg"] = msg
                                 if "show_delete_form" in st.session_state:
                                     del st.session_state["show_delete_form"]
