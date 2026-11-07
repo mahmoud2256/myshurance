@@ -10,6 +10,26 @@ import urllib.parse
 
 st.set_page_config(page_title="Myshurance - Hub", layout="wide")
 
+# --- NEW: Colors from v4_2 - Teal + Sand + Cairo ---
+TEAL_DARK, TEAL, TEAL_ACTIVE = "#07363B", "#0B4F55", "#226068"
+SAND, CREAM, BORDER = "#E8C9A0", "#F6F1E8", "#E8DCC8"
+def inject_css():
+    css = f"""
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+html, body, [class*="css"], .stApp, button, input, textarea, select {{ font-family: 'Cairo', sans-serif !important; }}
+.stApp {{ background: {CREAM}; }}
+header[data-testid="stHeader"] {{ background: transparent; }}
+.block-container {{ padding-top: 1.5rem; max-width: 1250px; }}
+[data-testid="stSidebar"] {{ background: linear-gradient(180deg, {TEAL}, {TEAL_DARK}); }}
+[data-testid="stSidebar"] * {{ color: #EAF1F0; }}
+[data-testid="stSidebar"] hr {{ border-color: rgba(255,255,255,.12); }}
+.stButton > button {{ background: {TEAL}; color: white; border-radius: 14px; border: 1px solid {TEAL_DARK}; font-weight: 700; }}
+.stButton > button:hover {{ background: {TEAL_ACTIVE}; color: white; }}
+h1, h2, h3 {{ color: {TEAL_DARK}; }}
+"""
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+inject_css()
+
 # --- NEW: Insurance Providers & Clients ---
 PROVIDERS = ["Sarwa Life", "Sarwa", "Orient", "AXA", "Gig Life"]
 
@@ -25,134 +45,222 @@ DEFAULT_CLIENTS = [
 # --- OCR: Scan National ID / Card - يملي لوحده ---
 def extract_from_id_image(image_file, manual_angle=0):
     """
-    Scan بطاقة / كارنيه - نسخة محسنة
-    المشكلة في الصورة اللي فاتت: الكارنيه متصور مايل + الكلام صغير + الخلفية ملونة
-    الحل: 1- تدوير يدوي 2- تكبير 3x 3- تبييض الخلفية 4- تجربة كل الاتجاهات
+    Scan من v4_2 - ocr.py:
+    - لو ANTHROPIC_API_KEY موجود في Secrets: Claude Vision (دقة أعلى)
+    - لو مش موجود: tesseract + قص الكارنيه + تصويت (6-12 قراءة، اللي يتكرر هو الصح)
+    مفيش تخمين: اللي مش متأكد منه بيفضل فاضي
     """
-    import re
+    import re, base64, io
     from PIL import Image, ImageOps, ImageEnhance
     debug = []
+    # --- جهز الصورة ---
     try:
-        img = Image.open(image_file)
+        raw = image_file.getvalue() if hasattr(image_file, "getvalue") else image_file.read()
+        # رجع المؤشر للبداية عشان st.image يقدر يقراها تاني
         try:
-            img = ImageOps.exif_transpose(img)
+            image_file.seek(0)
         except:
             pass
-        img = img.convert("RGB")
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
+        if manual_angle != 0:
+            img = img.rotate(manual_angle, expand=True)
+            debug.append(f"manual rotate {manual_angle}")
     except Exception as e:
-        return {"name": "", "dob": "", "national_id": "", "raw_text": f"ERROR OPEN: {e}", "debug": [f"open error {e}"]}
-    # لو المستخدم اختار زاوية يدوي، نبدأ بيها الأول
-    angles = [manual_angle, 0, 90, 180, 270]
-    # شيل التكرار مع الحفاظ على الترتيب
-    seen = set()
-    angles = [a for a in angles if not (a in seen or seen.add(a))]
-    variants = []
-    for angle in angles:
-        v = img.rotate(angle, expand=True) if angle != 0 else img.copy()
-        w, h = v.size
-        # كبّر 3x بدل 2x - الكلام الصغير لازم يتكبر أكتر
-        try:
-            v_big = v.resize((w*3, h*3), Image.LANCZOS)
-        except:
-            v_big = v
-        # نسخة ملونة + نسخة أبيض وأسود متباينة
-        try:
-            gray = v_big.convert("L")
-            gray = ImageOps.autocontrast(gray, cutoff=2)
-            gray = ImageEnhance.Contrast(gray).enhance(2.0)
-            variants.append((f"angle {angle} color 3x", v_big))
-            variants.append((f"angle {angle} gray contrast", gray))
-        except:
-            variants.append((f"angle {angle}", v_big))
-    all_texts = []
-    # --- المحرك 1: RapidOCR ---
+        return {"name": "", "dob": "", "national_id": "", "raw_text": "", "debug": [f"open error {e}"]}
+    # --- 1) Claude لو الـ Key موجود ---
+    api_key = None
     try:
-        from rapidocr_onnxruntime import RapidOCR
-        engine = RapidOCR()
-        for label, v in variants:
-            try:
-                import numpy as np
-                arr = np.array(v)
-                result, _ = engine(arr)
-                if result:
-                    txt = "\n".join([line[1] for line in result])
-                    if len(txt.strip()) > 10:
-                        all_texts.append(txt)
-                        debug.append(f"RapidOCR OK - {label} - {len(txt)} chars: {txt[:120]}")
-                        break  # لقينا نص كويس، كفاية
-            except Exception as e:
-                debug.append(f"RapidOCR fail {label}: {e}")
-                continue
-    except Exception as e:
-        debug.append(f"RapidOCR not available: {e}")
-    # --- المحرك 2: pytesseract ---
-    if not all_texts:
+        api_key = st.secrets.get("ANTHROPIC_API_KEY", None)
+    except:
+        api_key = None
+    if api_key:
         try:
-            import pytesseract
-            for label, v in variants[:6]:
+            import anthropic
+            # صغّر الصورة لـ 1600 زي v4_2
+            small = img.copy()
+            scale = 1600 / max(small.size)
+            if scale < 1:
+                small = small.resize((int(small.width*scale), int(small.height*scale)), Image.LANCZOS)
+            buf = io.BytesIO()
+            small.save(buf, "JPEG", quality=88)
+            jpeg = buf.getvalue()
+            client = anthropic.Anthropic(api_key=api_key)
+            # جرب بطاقة قومي الأول، لو مش بطاقة جرب كارنيه
+            for kind, prompt in [
+                ("nid", "ده تصوير لبطاقة رقم قومي مصرية. استخرج الاسم الكامل بالعربي والرقم القومي (14 رقم). حوّل الأرقام الهندية لأرقام إنجليزية. متخمّنش: لو حاجة مش واضحة سيبها null."),
+                ("card", "ده تصوير لكارنيه تأمين صحي. استخرج اسم المؤمن عليه ورقم الكارت والفئة وتاريخ الميلاد وتاريخ الانتهاء لو موجودين. انسخ رقم الكارت حرف بحرف، ومتخمّنش."),
+            ]:
                 try:
-                    vv = v.convert("L") if v.mode != "L" else v
-                    for psm in [6, 11, 3, 4]:
-                        try:
-                            txt = pytesseract.image_to_string(vv, lang="eng", config=f"--psm {psm} --oem 3")
-                            if txt and len(txt.strip()) > 10:
-                                all_texts.append(txt)
-                                debug.append(f"tesseract OK - {label} psm {psm} - {len(txt)} chars")
+                    resp = client.messages.create(model="claude-sonnet-4-5", max_tokens=800, messages=[{"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}}, {"type": "text", "text": prompt}]}])
+                    txt = ""
+                    for block in resp.content:
+                        if hasattr(block, "text"):
+                            txt += block.text
+                    debug.append(f"Claude {kind} raw: {txt[:300]}")
+                    # استخرج 14 رقم
+                    m = re.findall(r"\d{14}", txt.replace(" ", "").replace("\n",""))
+                    nid = m[0] if m else ""
+                    # استخرج اسم - أول سطر طويل فيه حروف
+                    name = ""
+                    for line in txt.split("\n"):
+                        line = line.strip()
+                        if len(line) >= 4 and any(c.isalpha() for c in line) and "رقم" not in line and "تاريخ" not in line:
+                            # شيل أي labels
+                            if ":" in line:
+                                line = line.split(":")[-1].strip()
+                            if len(line) >= 4:
+                                name = line
                                 break
-                        except:
-                            continue
-                    if all_texts:
-                        break
+                    if nid or name:
+                        debug.append(f"Claude SUCCESS {kind}: name={name} nid={nid}")
+                        return {"name": name, "dob": "", "national_id": nid, "card_no": "", "policy_holder": "", "raw_text": txt, "debug": debug}
                 except Exception as e:
-                    debug.append(f"tesseract fail {label}: {e}")
+                    debug.append(f"Claude {kind} fail: {str(e)[:200]}")
                     continue
         except Exception as e:
-            debug.append(f"tesseract not available: {e}")
-    text = "\n".join(all_texts)
-    debug.append(f"TOTAL TEXT LEN: {len(text)}")
-    # --- استخراج ---
-    nid = ""
-    m = re.findall(r"\d{14}", text.replace(" ", "").replace("\n","").replace("-",""))
-    if m:
-        nid = m[0]
+            debug.append(f"Claude not available: {e}")
+    # --- 2) tesseract بالتصويت + قص الكارنيه - من v4_2 ---
+    def _gray(im, scale):
+        g = ImageOps.grayscale(im.resize((int(im.width*scale), int(im.height*scale)), Image.LANCZOS))
+        return ImageEnhance.Contrast(g).enhance(1.8)
+    def _ocr(im, scale, psm, lang="eng"):
+        try:
+            import pytesseract
+            return pytesseract.image_to_string(_gray(im, scale), lang=lang, config=f"--psm {psm}")
+        except:
+            return ""
+    def _order_pts(pts):
+        import numpy as np
+        s, d = pts.sum(1), np.diff(pts, axis=1).ravel()
+        return np.array([pts[np.argmin(s)], pts[np.argmin(d)], pts[np.argmax(s)], pts[np.argmax(d)]], dtype="float32")
+    def _crop_card(im):
+        try:
+            import cv2, numpy as np
+            bgr = cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
+            h, w = bgr.shape[:2]
+            b = cv2.cvtColor(cv2.GaussianBlur(bgr, (9, 9), 0), cv2.COLOR_BGR2LAB)[:, :, 2]
+            _, th = cv2.threshold(b, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, np.ones((31, 31), np.uint8))
+            th = cv2.morphologyEx(th, cv2.MORPH_OPEN, np.ones((15, 15), np.uint8))
+            cs, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if not cs:
+                return None
+            c = max(cs, key=cv2.contourArea)
+            rect = cv2.minAreaRect(c)
+            cw, ch = rect[1]
+            if cv2.contourArea(c) < 0.15*h*w or not (1.3 < max(cw, ch)/max(1, min(cw, ch)) < 2.0):
+                return None
+            box = _order_pts(cv2.boxPoints(rect))
+            wd = int(max(np.linalg.norm(box[0]-box[1]), np.linalg.norm(box[3]-box[2])))
+            ht = int(max(np.linalg.norm(box[0]-box[3]), np.linalg.norm(box[1]-box[2])))
+            m = cv2.getPerspectiveTransform(box, np.array([[0,0],[wd,0],[wd,ht],[0,ht]], dtype="float32"))
+            warp = cv2.warpPerspective(bgr, m, (wd, ht))
+            if warp.shape[0] > warp.shape[1]:
+                warp = cv2.rotate(warp, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            debug.append("crop_card SUCCESS - قصيت الكارت وعدّلته")
+            return Image.fromarray(cv2.cvtColor(warp, cv2.COLOR_BGR2RGB))
+        except Exception as e:
+            debug.append(f"crop_card fail: {e}")
+            return None
+    def _norm_hex(tok):
+        tt = tok.upper().replace("O","0").replace("Q","0").replace("I","1").replace("L","1")
+        return tt if re.fullmatch(r"[0-9A-F]{12,20}", tt) else None
+    # قص الكارت الأول
+    cropped = _crop_card(img)
+    base = cropped if cropped is not None else img
+    # اختار الاتجاه الصح بالتصويت على كلمات الكارنيه
+    _KEYWORDS = ("card","insured","category","expiry","holder","national")
+    def _hits(text):
+        tl = text.lower()
+        return sum(k in tl for k in _KEYWORDS)
+    best_angle, best_score = 0, -1
+    for ang in (0, 90, 180, 270):
+        sc = _hits(_ocr(base.rotate(ang, expand=True), 1.2, 6))
+        if sc > best_score:
+            best_score, best_angle = sc, ang
+    debug.append(f"best angle {best_angle} score {best_score}")
+    card = base.rotate(best_angle, expand=True)
+    # 6 قراءات بالتوازي - التصويت
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        texts = list(ex.map(lambda p: _ocr(card, p[0], p[1]), ((1,4),(1,11),(1.5,11),(2,11),(1,6),(2,4))))
+    text_all = "\n".join(texts)
+    debug.append(f"tesseract texts len: {len(text_all)}")
+    # تصويت على رقم الكارت
+    from collections import Counter
+    hexes = []
+    for txt in texts:
+        for tok in re.findall(r"[0-9A-Za-z]{12,20}", txt):
+            h = _norm_hex(tok)
+            if h:
+                hexes.append(h)
     card_no = ""
-    cm = re.search(r"([A-F0-9]{10,})", text.replace(" ", "").replace("\n",""))
-    if cm:
-        card_no = cm.group(1)
-    name = ""
-    im = re.search(r"Insured\s*Name\s*:?\s*([A-Za-z ]+)", text, re.IGNORECASE)
-    if im:
-        name = im.group(1).strip()
-    else:
-        for line in text.split("\n"):
-            line = line.strip()
-            if any(k in line.lower() for k in ["allianz","nextcare","policy","card no","category","expiry","dental","optical","maternity"]):
+    if hexes:
+        val, n = Counter(hexes).most_common(1)[0]
+        if n >= 2:
+            card_no = val
+            debug.append(f"card_no voted {card_no} votes {n}")
+    # تصويت على الاسم
+    _BAD = re.compile(r"(?i)college|school|international|company|group|academy|universit|institute|hospital|ltd|limited|holder|insured|national|category|co-?pay|dental|optical|maternity|expiry|drugs|nextcare|allianz|single|family|card")
+    def _clean_words(s):
+        s = re.sub(r"[^A-Za-z' \-]", " ", s or "")
+        words = [w for w in s.split() if len(w) >= 2]
+        return " ".join(words) if 2 <= len(words) <= 5 and not _BAD.search(s) else None
+    name_cands = []
+    for txt in texts:
+        lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
+        for i, ln in enumerate(lines):
+            if not re.search(r"(?i)insured|name\s*:", ln):
                 continue
-            words = re.findall(r"[A-Z][A-Z]+", line)
-            if len(words) >= 2:
-                name = " ".join(words[:4])
-                break
-    if not name:
-        lines = [l.strip() for l in text.split("\n") if l.strip()]
-        arabic_lines = [l for l in lines if sum(1 for ch in l if '\u0600' <= ch <= '\u06FF') >= 4]
-        banned = ["جمهورية","مصر","بطاقة","الرقم","القومي","تاريخ"]
-        cands = [l for l in arabic_lines if not any(b in l for b in banned)]
-        if cands:
-            name = re.sub(r"[^ \u0600-\u06FF]", "", max(cands, key=len)).strip()
-            name = " ".join(name.split()[:4])
+            tail = _clean_words(ln.split(":")[-1]) if ":" in ln else None
+            if tail:
+                name_cands.append(tail)
+                continue
+            for j in (i-1, i+1):
+                if 0 <= j < len(lines):
+                    c = _clean_words(lines[j].split(":")[-1])
+                    if c:
+                        name_cands.append(c)
+    name = ""
+    if name_cands:
+        val, n = Counter(name_cands).most_common(1)[0]
+        if n >= 2:
+            name = val
+            debug.append(f"name voted {name} votes {n}")
+    # تاريخ الميلاد - DoB: 12-Nov-83
     dob = ""
-    dm = re.search(r"(\d{1,2}[-/]\w{3}[-/]\d{2,4})", text)
-    if dm:
-        dob = dm.group(1)
-    else:
-        dm2 = re.search(r"(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})", text)
-        if dm2:
-            dob = dm2.group(1)
-    policy_holder = ""
-    ph = re.search(r"Policy\s*Holder\s*:?\s*([A-Za-z ]+)", text, re.IGNORECASE)
-    if ph:
-        policy_holder = ph.group(1).strip()
-    return {"name": name, "dob": dob, "national_id": nid if nid else card_no, "card_no": card_no, "policy_holder": policy_holder, "raw_text": text, "debug": debug}
+    _MONTHS = {m:i for i,m in enumerate(["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"],1)}
+    for txt in texts:
+        m = re.search(r"(\d{1,2})\s?[-–]?\s?([A-Za-z]{3})\s?[-–]?\s?(\d{4}|\d{2})", txt)
+        if m:
+            mo = _MONTHS.get(m.group(2).lower())
+            if mo:
+                y = int(m.group(3))
+                y = y if y>99 else (1900+y if y>30 else 2000+y)
+                dob = f"{m.group(1)}-{m.group(2)}-{y}"
+                break
+    # رقم قومي 14 رقم - للبطاقة
+    nid = ""
+    # جرب البطاقة بـ ara+eng
+    if not card_no:
+        for ang in (0,90,180,270):
+            txt2 = _ocr(img.rotate(ang, expand=True), 1.5, 6, "ara+eng") + "\n" + _ocr(img.rotate(ang, expand=True), 1.5, 11, "ara+eng")
+            mm = re.findall(r"(?<!\d)\d{14}(?!\d)", txt2.replace(" ",""))
+            if mm:
+                nid = mm[0]
+                debug.append(f"nid found {nid}")
+                break
+    # لو لسه مفيش اسم عربي، دور على عربي
+    if not name:
+        for txt in texts:
+            lines = [l.strip() for l in txt.split("\n") if l.strip()]
+            arabic = [l for l in lines if sum(1 for ch in l if '\u0600' <= ch <= '\u06FF') >= 4]
+            if arabic:
+                name = max(arabic, key=len)[:50]
+                break
+    final_nid = nid if nid else card_no
+    debug.append(f"FINAL name={name} nid/card={final_nid} dob={dob}")
+    return {"name": name, "dob": dob, "national_id": final_nid, "card_no": card_no, "policy_holder": "", "raw_text": text_all, "debug": debug}
 
 # --- PDF CARD FUNCTION ---
 def generate_card_pdf(name, staff_id, national_id, plan, dependency, company="Myshurance"):
