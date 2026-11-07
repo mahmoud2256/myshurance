@@ -22,38 +22,72 @@ DEFAULT_CLIENTS = [
 # --- OCR: Scan National ID / Card - يملي لوحده ---
 def extract_from_id_image(image_file):
     """
-    بيقرا صورة البطاقة أو الكارنيه ويرجع الاسم / تاريخ الميلاد / الرقم القومي
+    بيقرا صورة البطاقة أو الكارنيه - بيجرب 4 اتجاهات + تكبير + تحسين
     الموظف بيراجع بس قبل الـ Action
     """
     import re
-    from PIL import Image
-    text = ""
+    from PIL import Image, ImageOps, ImageEnhance
     try:
         img = Image.open(image_file)
-        # محاولة OCR
+        # لو الصورة فيها EXIF rotation، عدّلها
         try:
-            import pytesseract
-            # عربي + انجليزي
+            img = ImageOps.exif_transpose(img)
+        except:
+            pass
+    except Exception:
+        return {"name": "", "dob": "", "national_id": "", "raw_text": ""}
+    texts = []
+    # جرّب OCR بطرق مختلفة
+    try:
+        import pytesseract
+        # جهز 4 نسخ: الأصلية + 90 + 180 + 270 + مكبرة
+        variants = []
+        for angle in [0, 90, 180, 270]:
+            v = img.rotate(angle, expand=True) if angle != 0 else img.copy()
+            # كبّر الصورة 2x عشان الكلام الصغير يتقري
+            w, h = v.size
+            v = v.resize((w*2, h*2), Image.LANCZOS)
+            # رمادي + تباين أعلى
             try:
-                text = pytesseract.image_to_string(img, lang="ara+eng")
+                v = v.convert("L")
+                v = ImageOps.autocontrast(v)
+                v = ImageEnhance.Contrast(v).enhance(1.5)
             except:
-                text = pytesseract.image_to_string(img, lang="eng")
-        except Exception:
-            text = ""
-        # لو OCR مش متاح على السيرفر، بنرجع نص فاضي والموظف هيشوف الصورة ويراجع
-    except Exception as e:
-        text = ""
+                pass
+            variants.append(v)
+        for v in variants:
+            for psm in [6, 11, 3]:
+                for lang in ["ara+eng", "eng"]:
+                    try:
+                        txt = pytesseract.image_to_string(v, lang=lang, config=f"--psm {psm}")
+                        if txt and len(txt.strip()) > 10:
+                            texts.append(txt)
+                    except:
+                        continue
+        # جرّب باركود الكارنيه - ساعات الرقم القومي بيكون في الباركود
+        try:
+            from pyzbar.pyzbar import decode as barcode_decode
+            codes = barcode_decode(img)
+            for c in codes:
+                try:
+                    texts.append(c.data.decode("utf-8", errors="ignore"))
+                except:
+                    pass
+        except:
+            pass
+    except Exception:
+        pass
+    text = "\n".join(texts)
     # استخراج الرقم القومي - 14 رقم
     nid = ""
-    m = re.findall(r"\d{14}", text.replace(" ", "").replace("\n",""))
+    m = re.findall(r"\d{14}", text.replace(" ", "").replace("\n","").replace("-",""))
     if m:
         nid = m[0]
     else:
-        # دور على أي 14 رقم متقطع
         digits = re.findall(r"\d", text)
         if len(digits) >= 14:
             nid = "".join(digits[:14])
-    # استخراج تاريخ ميلاد - DD/MM/YYYY أو DD-MM-YYYY أو YYYY-MM-DD
+    # تاريخ ميلاد
     dob = ""
     dm = re.search(r"(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})", text)
     if dm:
@@ -62,20 +96,16 @@ def extract_from_id_image(image_file):
         dm2 = re.search(r"(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})", text)
         if dm2:
             dob = dm2.group(1)
-    # الاسم - بناخد أطول سطر فيه حروف عربي
+    # الاسم
     name = ""
     lines = [l.strip() for l in text.split("\n") if l.strip()]
-    # فلتر السطور اللي فيها حروف عربي كتير
     arabic_lines = [l for l in lines if sum(1 for ch in l if '\u0600' <= ch <= '\u06FF') >= 4]
-    # شيل سطور العناوين الشائعة
-    banned = ["جمهورية", "مصر", "بطاقة", "الرقم", "القومي", "تاريخ", "محل", "النوع", "الاسم"]
-    candidates = [l for l in arabic_lines if not any(b in l for b in banned)]
+    banned = ["جمهورية", "مصر", "بطاقة", "الرقم", "القومي", "تاريخ", "محل", "النوع", "الاسم", "care", "Medicare", "Card", "Valid"]
+    candidates = [l for l in arabic_lines if not any(b.lower() in l.lower() for b in banned)]
     if candidates:
-        # أطول سطر غالبا هو الاسم الثلاثي
         name = max(candidates, key=len)
-        # نضف الأرقام والرموز
         name = re.sub(r"[^ \u0600-\u06FF]", "", name).strip()
-        name = " ".join(name.split()[:4])  # أقصى 4 كلمات - الاسم الثلاثي / الرباعي
+        name = " ".join(name.split()[:4])
     return {"name": name, "dob": dob, "national_id": nid, "raw_text": text}
 
 # --- PDF CARD FUNCTION ---
@@ -458,10 +488,26 @@ with tab0:
         st.info("No companies yet - دوس على زرار إضافة العملاء الأربعة فوق")
     else:
         st.dataframe(df_comp, use_container_width=True)
+        st.divider()
+        st.subheader("🗑 حذف شركة - زي CAC (321)")
+        st.caption("اختار الشركة اللي عايز تمسحها، زي CAC اللي كانت تجربة، ودوس حذف")
+        del_comp_name = st.selectbox("اختار الشركة للحذف", df_comp["Company Name"].astype(str).tolist(), key="del_company_sel")
+        if st.button(f"🗑 امسح {del_comp_name} نهائياً", use_container_width=True, key="btn_del_company"):
+            # امسح من الشيت
+            ws_c = get_sheet().worksheet("companies")
+            all_vals = ws_c.get_all_values()
+            # الصف الأول هيدر، دور على الصف اللي فيه الاسم
+            for idx, row in enumerate(all_vals[1:], start=2):
+                if row and row[0].strip() == del_comp_name.strip():
+                    ws_c.delete_rows(idx)
+                    break
+            st.success(f"تم مسح {del_comp_name} ✅")
+            st.rerun()
 
 with tab1:
     st.subheader("➕ Add New Member - إضافة بالـ Scan")
     st.caption("ارفع صورة البطاقة أو الكارنيه، السيستم هيملي البيانات لوحده، انت راجع بس قبل ما تدوس Save")
+    st.info("💡 عشان الـ Scan ينجح: صور البطاقة **معدولة مش مقلوبة**، في نور كويس، والكلام واضح ومش مهزوز. الصورة المقلوبة أو البعيدة مش هتتقري.")
     # --- Scan Section ---
     scan_file = st.file_uploader("📸 Scan البطاقة الشخصية أو الكارنيه - ارفع الصورة هنا", type=["jpg","jpeg","png"], key="scan_id")
     if scan_file is not None:
