@@ -287,7 +287,7 @@ def _name_cands(text):
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     out = []
     for i, ln in enumerate(lines):
-        if not re.search(r"(?i)insured|name\s*:", ln):
+        if not re.search(r"(?i)insured|name\s*:|policy\s*holder", ln):
             continue
         tail = _clean_words(ln.split(":")[-1]) if ":" in ln else None
         if tail:
@@ -538,25 +538,52 @@ def extract_from_id_image(image_file, manual_angle=0):
                 _cm = _re2.search(r"([A-F0-9]{10,})", _txt.replace(" ",""))
                 if _cm:
                     data["card_no"] = _cm.group(1)
-                _im = _re2.search(r"Insured\s*Name\s*:?\s*([A-Za-z ]+)", _txt, _re2.IGNORECASE)
-                if _im:
+                # الكارت ده الاسم فيه بعد Policy Holder مش Insured Name - ده كان سبب الغلط
+                _ph = _re2.search(r"Policy\s*Holder\s*:?\s*([A-Z][A-Za-z ]+)", _txt, _re2.IGNORECASE)
+                _im = _re2.search(r"Insured\s*Name\s*:?\s*([A-Z][A-Za-z ]+)", _txt, _re2.IGNORECASE)
+                # لو Insured Name فاضي (زي صورة FATEMA) خد Policy Holder
+                if _ph and len(_ph.group(1).strip())>=4:
+                    data["name"] = _ph.group(1).strip().split("\n")[0].strip()
+                elif _im and len(_im.group(1).strip())>=4 and "national" not in _im.group(1).lower():
                     data["name"] = _im.group(1).strip()
                 else:
                     for _ln in _txt.split("\n"):
                         _ln=_ln.strip()
-                        if any(k in _ln.lower() for k in ["allianz","nextcare","policy","card no","category","expiry","dental","optical"]):
+                        # استبعد أي سطر فيه لابل - عشان مياخدش National No على إنه اسم
+                        if any(k in _ln.lower() for k in ["allianz","nextcare","policy","card no","category","expiry","dental","optical","national","dob","doB","holder","insured","category","co-pay","maternity","expiry","leaders","college","international"]):
                             continue
                         _w = _re2.findall(r"[A-Z][A-Z]+", _ln)
                         if len(_w)>=2:
                             data["name"]=" ".join(_w[:4])
                             break
+                # رقم الكارت: 16 حرف Hex زي 8D0EF2AEDE9E827A - دور عليه تحديدا
+                _all_hex = _re2.findall(r"\b[0-9A-F]{14,18}\b", _txt.replace(" ",""))
+                if _all_hex:
+                    data["card_no"] = max(_all_hex, key=len)
+                    # الرقم القومي مش هو رقم الكارت - لو مفيش 14 رقم، سيب National ID فاضي عشان المستخدم يكمله يدوي
+                    # ومتحطش رقم الكارت في خانة الرقم القومي
+                    if not data.get("national_id"):
+                        pass
+                # تاريخ الميلاد: في كارت FATEMA بييجي بعد National No: بسبب العمودين
+                _dob_m = _re2.search(r"National\s*No\s*:?\s*(\d{1,2}[-/][A-Za-z]{3}[-/]\d{2,4})", _txt, _re2.IGNORECASE)
+                if _dob_m:
+                    data["dob"] = _dob_m.group(1)
                 _dm = _re2.search(r"(\d{1,2}[-/]\w{3}[-/]\d{2,4})", _txt)
                 if _dm:
                     data["dob"]=_dm.group(1)
-                return {"name": data.get("name",""), "dob": data.get("dob","") or data.get("source_end",""), "national_id": data.get("national_id","") or data.get("card_no",""), "card_no": data.get("card_no",""), "policy_holder": "", "raw_text": _txt, "debug": debug}
+                _nid2 = data.get("national_id","")
+                import re as _re_nid2
+                if not _re_nid2.fullmatch(r"\d{14}", str(_nid2).strip()):
+                    _nid2 = ""
+                return {"name": data.get("name",""), "dob": data.get("dob","") or data.get("source_end",""), "national_id": _nid2, "card_no": data.get("card_no",""), "policy_holder": "", "raw_text": _txt, "debug": debug}
         except Exception as e:
             debug.append(f"OCR.space fail: {str(e)[:200]}")
-    return {"name": data.get("name",""), "dob": data.get("dob",""), "national_id": data.get("national_id","") or data.get("card_no",""), "card_no": data.get("card_no",""), "policy_holder": "", "raw_text": f"engine={res.get('engine')} data={data} warnings={res.get('warnings')}", "debug": debug}
+    # مهم: رقم الكارت مش هو الرقم القومي - لو اللي اتقرا مش 14 رقم، سيب الرقم القومي فاضي عشان المستخدم يكمله
+    _nid_out = data.get("national_id","")
+    import re as _re_nid
+    if not _re_nid.fullmatch(r"\d{14}", str(_nid_out).strip()):
+        _nid_out = ""
+    return {"name": data.get("name",""), "dob": data.get("dob",""), "national_id": _nid_out, "card_no": data.get("card_no",""), "policy_holder": "", "raw_text": f"engine={res.get('engine')} data={data} warnings={res.get('warnings')}", "debug": debug}
 
 
 # --- PDF CARD FUNCTION ---
@@ -984,7 +1011,9 @@ with tab1:
             for d in res.get("debug", [])[:10]:
                 st.text(d)
             if res["national_id"] or res["name"]:
-                st.success(f"تم القراءة ✅ - الاسم: {res['name']} | الرقم: {res['national_id']} | الميلاد: {res['dob']}")
+                st.success(f"تم القراءة ✅ - الاسم: {res['name']} | رقم الكارت: {res.get('card_no','')} | الرقم القومي: {res['national_id'] or 'كمله يدوي'} | الميلاد: {res['dob']}")
+                if res.get('card_no'):
+                    st.info(f"🪪 رقم الكارت اللي اتقرا: {res['card_no']} - انسخه في ملاحظاتك لو محتاجه، والرقم القومي (14 رقم) كمله يدوي من البطاقة")
             else:
                 st.warning("مقدرتش أقرا كل البيانات - اتأكد ان الصورة واضحة، وعدّل يدوي تحت")
     if "scan_name" not in st.session_state:
