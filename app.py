@@ -1,3 +1,6 @@
+# Myshurance - Based on YOUR old code (622 lines) + edits on top of it
+# Old code preserved, only added: PROVIDERS + CLIENTS + Scan + Deletion new flow + Delete Company
+# Total lines now: see bottom - old 622 + new features
 import streamlit as st
 import pandas as pd
 import os
@@ -49,6 +52,7 @@ def extract_from_id_image(image_file):
             pass
         variants.append(v)
     all_texts = []
+    debug_errors = []
     # --- المحرك 1: RapidOCR - الأسرع والأضمن على Streamlit ---
     try:
         from rapidocr_onnxruntime import RapidOCR
@@ -65,7 +69,7 @@ def extract_from_id_image(image_file):
             except Exception:
                 continue
     except Exception as e:
-        pass
+        debug_errors.append(f"RapidOCR fail: {e}")
     # --- المحرك 2: pytesseract - لو RapidOCR مش موجود ---
     if not all_texts:
         try:
@@ -79,9 +83,11 @@ def extract_from_id_image(image_file):
                             txt = pytesseract.image_to_string(vv, lang="eng", config=f"--psm {psm}")
                             if txt and len(txt.strip()) > 10:
                                 all_texts.append(txt)
-                        except:
+                        except Exception as e2:
+                            debug_errors.append(f"pytesseract psm fail: {e2}")
                             continue
-                except:
+                except Exception as e3:
+                    debug_errors.append(f"pytesseract variant fail: {e3}")
                     continue
         except:
             pass
@@ -153,7 +159,7 @@ def extract_from_id_image(image_file):
     ph = re.search(r"Policy\s*Holder\s*:?\s*([A-Za-z ]+)", text, re.IGNORECASE)
     if ph:
         policy_holder = ph.group(1).strip()
-    return {"name": name, "dob": dob, "national_id": nid if nid else card_no, "card_no": card_no, "policy_holder": policy_holder, "raw_text": text}
+    return {"name": name, "dob": dob, "national_id": nid if nid else card_no, "card_no": card_no, "policy_holder": policy_holder, "raw_text": text, "debug_errors": debug_errors}
 
 # --- PDF CARD FUNCTION ---
 def generate_card_pdf(name, staff_id, national_id, plan, dependency, company="Myshurance"):
@@ -567,6 +573,14 @@ with tab1:
                 st.session_state["scan_nid"] = res["national_id"]
                 st.session_state["scan_raw"] = res["raw_text"]
                 st.session_state["scan_done"] = True
+            with st.expander("🔍 شوف اللي اتقرا من الصورة - للتشخيص"):
+                st.text(f"Raw text len: {len(res.get('raw_text',''))}")
+                st.text(res.get("raw_text","")[:3000] or "مفيش نص اتقرا خالص")
+                if res.get("debug_errors"):
+                    st.text("Errors:")
+                    for e in res["debug_errors"]:
+                        st.text(str(e))
+                st.text("لو مفيش نص، يبقى ملف packages.txt مش موجود على GitHub - شوف الخطوة اللي تحت")
             if res["national_id"] or res["name"]:
                 st.success(f"تم القراءة ✅ - الاسم: {res['name']} | الرقم: {res['national_id']} | الميلاد: {res['dob']} | المدرسة: {res.get('policy_holder','')}")
                 st.info("راجع البيانات تحت، لو فيه حاجة غلط عدّلها قبل ما تدوس Save - انت المراجع بس")
@@ -746,7 +760,7 @@ with tab2:
                                 photo_name = f"{s_nid}_{timestamp}.{del_photo.name.split('.')[-1]}"
                                 with open(os.path.join(PHOTOS_DIR, photo_name), "wb") as f:
                                     f.write(del_photo.getbuffer())
-                                new_row = {"Staff ID": s_staff, "* First Name": s_fname, "* Family Name": s_lname, "* Dependency": sel_row.get("* Dependency",""), "* Gender": sel_row.get("* Gender",""), "* Date of Birth": sel_row.get("* Date of Birth",""), "* Plan": s_plan, "* Mobile Number": sel_row.get("* Mobile Number",""), "Email ID": sel_row.get("Email ID",""), "* IBAN/Account Number": sel_row.get("* IBAN/Account Number",""), "* National ID": s_nid, "Company": sel_school_del, "Deletion Date": str(del_date), "Reason": del_reason, "Policy Number": _crow.get("Policy Number","") if ' _crow' in locals() else "", "Provider": _crow.get("Provider","") if '_crow' in locals() else ""}
+                                new_row = {"Staff ID": s_staff, "* First Name": s_fname, "* Family Name": s_lname, "* Dependency": sel_row.get("* Dependency",""), "* Gender": sel_row.get("* Gender",""), "* Date of Birth": sel_row.get("* Date of Birth",""), "* Plan": s_plan, "* Mobile Number": sel_row.get("* Mobile Number",""), "Email ID": sel_row.get("Email ID",""), "* IBAN/Account Number": sel_row.get("* IBAN/Account Number",""), "* National ID": s_nid, "Company": sel_school_del, "Deletion Date": str(del_date), "Reason": del_reason, "Policy Number": _crow.get("Policy Number","") if '_crow' in locals() else "", "Provider": _crow.get("Provider","") if '_crow' in locals() else ""}
                                 save_to_sheet_gs("deletion", new_row)
                                 st.success(f"تم حذف {s_fname} {s_lname} ✅ - الصف اتحول أوتوماتيك لشيت الحذف النهائي اللي هيتبعت لشركة التأمين")
                                 msg = f"Deletion Request - Myshurance:\nSchool: {sel_school_del}\nName: {s_fname} {s_lname}\nStaff ID: {s_staff}\nNational ID: {s_nid}\nDeletion Date: {del_date}\nReason: {del_reason}"
