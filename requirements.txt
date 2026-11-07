@@ -1,11 +1,8 @@
-streamlit>=1.50
-pandas>=2.0
-openpyxl>=3.1
+streamlit
+pandas
+openpyxl
 gspread
 google-auth
 reportlab
-Pillow>=10.0
-pytesseract>=0.3.10
-opencv-python-headless>=4.8
-numpy
-anthropic>=0.40
+pillow
+pytesseract
