@@ -163,6 +163,17 @@ TRANSLATIONS = {
         "all_companies": "كل الشركات",
         "no_companies": "مفيش شركات لسه - دوس على زرار إضافة العملاء الأربعة فوق",
         "approve_reject": "قبول / رفض",
+        "gender_male": "ذكر",
+        "gender_female": "أنثى",
+        "dep_employee": "موظف",
+        "dep_spouse": "زوج / زوجة",
+        "dep_child": "ابن / ابنة",
+        "dep_parent": "أب / أم",
+        "plan_a": "الخطة أ",
+        "plan_b": "الخطة ب",
+        "plan_c": "الخطة ج",
+        "plan_d": "الخطة د",
+
         "manual_nid_label": "أو اكتب الرقم القومي يدوي هنا (لو السكان فشل - 14 رقم)",
         "manual_nid_help": "لو صورة البطاقة مشوشة، اكتب الرقم القومي هنا وهيطلعلك تاريخ الميلاد والنوع لوحدهم",
         "plan_from_card": "* الخطة - من الكارت",
@@ -326,6 +337,17 @@ TRANSLATIONS = {
         "all_companies": "All Companies",
         "no_companies": "No companies yet - Click Add the 4 Ready Clients above",
         "approve_reject": "Approve / Reject",
+        "gender_male": "Male",
+        "gender_female": "Female",
+        "dep_employee": "Employee",
+        "dep_spouse": "Spouse",
+        "dep_child": "Child",
+        "dep_parent": "Parent",
+        "plan_a": "Plan A",
+        "plan_b": "Plan B",
+        "plan_c": "Plan C",
+        "plan_d": "Plan D",
+
         "manual_nid_label": "Or type National ID manually here (if Scan failed - 14 digits)",
         "manual_nid_help": "If ID photo is blurry, type National ID here and DOB + Gender will be filled automatically",
         "plan_from_card": "* Plan - From Card",
@@ -1487,10 +1509,21 @@ with tab1:
         staff_id = c1.text_input(T("staff_id"))
         first_name = c1.text_input(T("first_name"), value=_def_first)
         family_name = c2.text_input(T("family_name"), value=_def_family)
-        dependency = c2.selectbox(T("dependency"), ["Employee", "Spouse", "Child", "Parent"] if LANG=="en" else ["Employee", "Spouse", "Child", "Parent"])
-        gender = c1.selectbox(T("gender"), ["Male", "Female"], index=0 if (_manual_gender or _def_gender)=="Male" else 1)
+        # الاختيارات بتتعرض باللغة اللي اخترتها، بس بتتسجل في الشيت إنجليزي زي ما شركة التأمين عايزاه
+        _dep_display = [T("dep_employee"), T("dep_spouse"), T("dep_child"), T("dep_parent")]
+        _dep_values = ["Employee", "Spouse", "Child", "Parent"]
+        _dep_choice = c2.selectbox(T("dependency"), _dep_display)
+        dependency = _dep_values[_dep_display.index(_dep_choice)]
+        _gender_display = [T("gender_male"), T("gender_female")]
+        _gender_values = ["Male", "Female"]
+        _gender_choice = c1.selectbox(T("gender"), _gender_display, index=0 if (_manual_gender or _def_gender)=="Male" else 1)
+        gender = _gender_values[_gender_display.index(_gender_choice)]
         dob = c1.date_input(T("dob"), value=_def_dob)
-        plan = c2.selectbox(T("plan_from_card"), ["Plan A", "Plan B", "Plan C", "Plan D"], index=["Plan A","Plan B","Plan C","Plan D"].index(_def_plan) if _def_plan in ["Plan A","Plan B","Plan C","Plan D"] else 0)
+        _plan_display = [T("plan_a"), T("plan_b"), T("plan_c"), T("plan_d")]
+        _plan_values = ["Plan A", "Plan B", "Plan C", "Plan D"]
+        _plan_idx = _plan_values.index(_def_plan) if _def_plan in _plan_values else 0
+        _plan_choice = c2.selectbox(T("plan_from_card"), _plan_display, index=_plan_idx)
+        plan = _plan_values[_plan_display.index(_plan_choice)]
         provider_add = c1.selectbox(T("provider"), _prov_options, index=_prov_options.index(_def_provider) if _def_provider in _prov_options else 0)
         policy_num_add = c1.text_input(T("policy_num"))
         mobile = c2.text_input(T("mobile"))
@@ -1649,7 +1682,7 @@ with tab3:
         u_first = c1.text_input("* First Name")
         u_family = c2.text_input("* Family Name")
         u_national = c2.text_input("* National ID")
-        old_plan = c1.selectbox("Old Plan", ["Plan A", "Plan B", "Plan C"])
+        old_plan = c1.selectbox(T("old_plan"), _plan_values if "_plan_values" in dir() else ["Plan A", "Plan B", "Plan C"])
         new_plan = c2.selectbox("New Plan *", ["Plan A", "Plan B", "Plan C"])
         u_reason = st.text_area("Reason for Upgrade")
         u_submitted = st.form_submit_button("Confirm Upgrade ⬆", use_container_width=True)
