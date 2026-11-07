@@ -27,6 +27,355 @@ h1, h2, h3 {{ color: {TEAL_DARK}; }}
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 inject_css()
 
+# ===== Language System - عربي / English - مفيش خلط =====
+if "lang" not in st.session_state:
+    st.session_state["lang"] = "ar"
+# زرار اللغة فوق خالص - قبل أي حاجة
+# زرار اللغة - نفسه لازم يبقى بلغة واحدة بس، من غير خلط
+# لو اللغة عربي: الليبل والاختيارات عربي بس. لو انجليزي: الليبل والاختيارات انجليزي بس.
+if st.session_state["lang"] == "ar":
+    _lang_label = "🌐 اللغة"
+    _lang_opts = ["العربية", "الإنجليزية"]
+    _lang_choice = st.sidebar.radio(_lang_label, _lang_opts, index=0 if st.session_state["lang"]=="ar" else 1, key="lang_radio")
+    st.session_state["lang"] = "ar" if _lang_choice=="العربية" else "en"
+else:
+    _lang_label = "🌐 Language"
+    _lang_opts = ["Arabic", "English"]
+    _lang_choice = st.sidebar.radio(_lang_label, _lang_opts, index=1, key="lang_radio")
+    st.session_state["lang"] = "en" if _lang_choice=="English" else "ar"
+LANG = st.session_state["lang"]
+
+TRANSLATIONS = {
+    "ar": {
+        "login_title": "🔐 مايشورانس - تسجيل الدخول",
+        "login_sub": "مدير أو موظف - اختار نوع الدخول",
+        "login_as": "دخول كـ:",
+        "admin": "👨💼 مدير",
+        "employee": "👤 موظف",
+        "username": "اسم المستخدم",
+        "password": "كلمة السر",
+        "login_admin": "دخول كمدير",
+        "wrong": "❌ اسم المستخدم أو كلمة السر غلط",
+        "default_admin": "المدير الافتراضي: admin / myshurance123",
+        "emp_title": "👤 خدمة الموظف",
+        "emp_sub": "ادخل بالرقم القومي عشان تشوف بياناتك وموافقاتك",
+        "emp_nid": "الرقم القومي *",
+        "emp_btn": "عرض بياناتي 👀",
+        "emp_empty": "اكتب الرقم القومي",
+        "emp_no_data": "مفيش بيانات لسه",
+        "emp_not_found": "❌ الرقم القومي مش موجود - كلم الـ HR",
+        "emp_note": "الموظف بيدخل بالرقم القومي بس، من غير باسورد",
+        "logout": "خروج 🚪",
+        "hub_title": "مايشورانس",
+        "hub_sub": "شيتات جوجل مباشرة - شركات / إضافة / حذف / ترقية / موافقات / تحليلات",
+        "wa_title": "📱 إعدادات واتساب",
+        "wa_num": "رقم واتساب الـ HR / الشركة",
+        "wa_hint": "الرقم اللي هيتبعتله التنبيه، بكود الدولة من غير +",
+        "alerts": "🔔 تنبيهات",
+        "alerts_none": "✅ مفيش تنبيهات - كل حاجة تمام",
+        "alerts_old": "⚠ فيه موافقات معلقة بقالها أكتر من يومين - لازم تتراجع!",
+        "alerts_exp": "🚨 فيه كروت هتخلص خلال 30 يوم!",
+        "companies_m": "شركات",
+        "addition_m": "إضافة",
+        "deletion_m": "حذف",
+        "upgrade_m": "ترقية",
+        "pending_m": "موافقات معلقة",
+        "total_m": "إجمالي الطلبات",
+        "last_wa": "آخر طلب اتسجل ✅ - ابعته واتساب من هنا:",
+        "send_wa": "ابعت على واتساب",
+        "clear_wa": "امسح رسالة الواتساب ❌",
+        "export_title": "📥 تصدير تقرير",
+        "export_choose": "اختار اللي هتصدّره",
+        "export_btn": "تحميل تقرير إكسل 📥",
+        "export_save": "دوس هنا عشان تحفظ الملف 💾",
+        "search_title": "🔍 بحث عن عضو",
+        "search_ph": "مثال: أحمد أو 2980101...",
+        "search_no_data": "مفيش بيانات لسه",
+        "search_no": "مفيش نتائج لـ:",
+        "search_found": "لقينا نتيجة",
+        "tab_comp": "🏢 شركات",
+        "tab_add": "➕ إضافة",
+        "tab_del": "➖ حذف",
+        "tab_upg": "⬆ ترقية",
+        "tab_appr": "✅ موافقات",
+        "tab_analytics": "📊 تحليلات",
+        "scan_title": "➕ إضافة عضو جديد - بالإضافة بالسكان",
+        "scan_cap": "ارفع صورة البطاقة أو الكارنيه، السيستم هيملي البيانات لوحده، انت راجع بس قبل ما تدوس حفظ",
+        "scan_tip": "💡 عشان السكان ينجح: صوّر البطاقة معدولة مش مقلوبة، في نور كويس، والكلام واضح ومش مهزوز.",
+        "scan_upload": "📸 ارفع صورة البطاقة أو الكارنيه",
+        "scan_uploaded": "الصورة اللي اترفعت",
+        "scan_btn": "🔍 اعمل سكان واملا البيانات لوحدها",
+        "scan_reading": "بقرا البطاقة... ثواني",
+        "scan_ok": "تم القراءة ✅",
+        "scan_card_no": "رقم الكارت",
+        "scan_nid_manual": "والرقم القومي (14 رقم) كمله يدوي من البطاقة الشخصية",
+        "scan_fail": "مقدرتش أقرا البيانات - الصورة مش واضحة. جرب تصورها تاني معدولة وبالعرض ومن غير فلاش، أو اكتب الرقم القومي (14 رقم) يدوي تحت وهيطلعلك تاريخ الميلاد والنوع لوحدهم.",
+        "scan_from_nid": "✅ من الرقم القومي: تاريخ الميلاد",
+        "scan_gender_label": "النوع",
+        "select_company": "اختار الشركة",
+        "staff_id": "رقم الموظف",
+        "first_name": "الاسم الأول - من السكان",
+        "family_name": "باقي الاسم",
+        "dependency": "صلة القرابة",
+        "gender": "النوع",
+        "dob": "تاريخ الميلاد - من السكان أو من الرقم القومي",
+        "plan": "الخطة - من الكارت",
+        "provider": "شركة التأمين - من الكارت",
+        "policy_num": "رقم الوثيقة",
+        "mobile": "رقم الموبايل",
+        "email": "البريد الإلكتروني",
+        "iban": "رقم الحساب / الآيبان",
+        "national_id": "الرقم القومي - من السكان أو اكتبه يدوي (14 رقم)",
+        "expiry": "تاريخ انتهاء الكارت",
+        "save_add": "حفظ الإضافة ✅",
+        "req_first": "الاسم الأول وباقي الاسم والرقم القومي مطلوبين",
+        "added": "اتضاف",
+        "to": "إلى",
+        "print_card": "🪪 طباعة كارت العضو",
+        "select_nid": "اختار العضو بالرقم القومي",
+        "download_card": "تحميل الكارت",
+        "my_title": "👤 بياناتي",
+        "my_card_data": "📋 بيانات الكارت",
+        "my_card": "🪪 الكارت بتاعي",
+        "my_appr": "✅ موافقاتي",
+        "my_upg": "⬆ ترقياتي",
+        "my_del": "➖ طلبات الحذف بتاعتي",
+        "my_no_appr": "مفيش موافقات لسه",
+        "my_no_upg": "مفيش ترقيات",
+        "my_no_del": "مفيش طلبات حذف",
+        "my_note": "لو فيه بيانات غلط، كلم الـ HR - انت تقدر تشوف بس، مش تعدل",
+        "name_col": "الاسم",
+        "plan_col": "الخطة",
+        "dep_col": "صلة القرابة",
+        "add_company": "إضافة شركة جديدة",
+        "add_4_clients": "➕ أضف العملاء الأربعة الجاهزين",
+        "added_n": "تم إضافة",
+        "company_word": "شركة",
+        "clients_exist": "العملاء الأربعة موجودين خلاص ✅",
+        "company_name": "اسم الشركة *",
+        "policy_name": "اسم الوثيقة",
+        "hr_name": "اسم مسؤول الـ HR",
+        "hr_phone": "تليفون الـ HR / واتساب",
+        "members_count": "عدد الأعضاء",
+        "save_company": "حفظ الشركة 🏢",
+        "company_required": "اسم الشركة مطلوب",
+        "added_ok": "اتضافت ✅",
+        "all_companies": "كل الشركات",
+        "no_companies": "مفيش شركات لسه - دوس على زرار إضافة العملاء الأربعة فوق",
+        "approve_reject": "قبول / رفض",
+        "manual_nid_label": "أو اكتب الرقم القومي يدوي هنا (لو السكان فشل - 14 رقم)",
+        "manual_nid_help": "لو صورة البطاقة مشوشة، اكتب الرقم القومي هنا وهيطلعلك تاريخ الميلاد والنوع لوحدهم",
+        "plan_from_card": "* الخطة - من الكارت",
+        "gender": "* النوع",
+
+        "my_title": "👤 تأميني - بياناتي",
+        "my_card_data": "📋 بيانات الكارت",
+        "my_card": "🪪 الكارت بتاعي",
+        "my_appr": "✅ موافقاتي",
+        "my_upg": "⬆ ترقياتي",
+        "my_del": "➖ طلبات الحذف بتاعتي",
+        "my_note": "لو فيه بيانات غلط، كلم الـ HR - انت تقدر تشوف بس، مش تعدل",
+        "wa_first": "اكتب رقم الواتساب في الشريط الجانبي الأول",
+        "scan_ok_full": "تم القراءة ✅ - الاسم:",
+        "scan_nid_lbl": "الرقم القومي:",
+        "scan_dob_lbl": "الميلاد:",
+        "scan_gender_lbl": "النوع:",
+        "scan_name_ar_note": "✍️ الاسم بالعربي اتقرا مكسر من الصورة - اكتبه انت يدوي بالعربي أو بالإنجليزي في الفورم تحت، باقي البيانات اتملت لوحدها من الرقم القومي.",
+        "print_card": "🪪 طباعة كارت العضو",
+        "del_title": "حذف عضو - لازم صورة الكارت التالف",
+        "del_req": "الاسم الأول واسم العائلة والرقم القومي مطلوبين",
+        "del_no_photo": "❌ مينفعش حذف من غير صورة الكارت التالف",
+        "upg_req": "الاسم الأول واسم العائلة والرقم القومي مطلوبين",
+        "upg_same": "❌ الخطة الجديدة لازم تكون مختلفة عن القديمة",
+        "appr_req": "الاسم والرقم القومي مطلوبين",
+        "analytics_title": "📊 تحليلات - نظرة عامة",
+        "monthly_title": "📅 تقرير شهري",
+        "monthly_ok": "ده التقرير اللي ممكن تبعته للشركة كل أول شهر ✅",
+        "del_school": "اختار الشركة",
+        "del_search": "دوّر بالاسم أو الرقم القومي أو رقم الموظف",
+        "del_choose": "اختار العضو اللي هتحذفه",
+        "del_type": "نوع الحذف",
+        "del_replacement": "استبدال - فيه بديل مكانه",
+        "del_final": "حذف نهائي - مفيش بديل",
+        "del_date": "تاريخ الحذف",
+        "del_date_hint": "تاريخ الحذف ميبقاش في المستقبل، وأقصى حاجة 30 يوم فاتوا.",
+        "del_date_future": "❌ تاريخ الحذف مينفعش يبقى في المستقبل",
+        "del_date_old": "❌ تاريخ الحذف أقصاه 30 يوم فاتوا - أقدم من كده مينفعش",
+        "del_confirm": "تأكيد الحذف 🗑",
+        "del_reason": "سبب الحذف",
+        "del_photo": "📷 صورة الكارت التالف - إجباري",
+        "del_no_members": "مفيش أعضاء في الشركة دي",
+        "del_no_match": "مفيش عضو مطابق للبحث",
+        "del_done": "تم الحذف ✅ واتنقل للشيت النهائي",
+
+    },
+    "en": {
+        "login_title": "🔐 Myshurance - Login",
+        "login_sub": "Admin or Employee - Choose login type",
+        "login_as": "Login as:",
+        "admin": "👨💼 Admin",
+        "employee": "👤 Employee",
+        "username": "Username",
+        "password": "Password",
+        "login_admin": "Login as Admin",
+        "wrong": "❌ Wrong username or password",
+        "default_admin": "Default Admin: admin / myshurance123",
+        "emp_title": "👤 Employee Self-Service",
+        "emp_sub": "Enter your National ID to view your data and approvals",
+        "emp_nid": "National ID *",
+        "emp_btn": "View My Data 👀",
+        "emp_empty": "Enter National ID",
+        "emp_no_data": "No data yet",
+        "emp_not_found": "❌ National ID not found - Contact HR",
+        "emp_note": "Employee logs in with National ID only, no password",
+        "logout": "Logout 🚪",
+        "hub_title": "Myshurance Hub",
+        "hub_sub": "Google Sheets Live - Companies / Addition / Deletion / Upgrade / Approvals / Analytics",
+        "wa_title": "📱 WhatsApp Settings",
+        "wa_num": "HR / Company WhatsApp Number",
+        "wa_hint": "Number to receive alerts, with country code without +",
+        "alerts": "🔔 Alerts",
+        "alerts_none": "✅ No alerts - Everything is fine",
+        "alerts_old": "⚠ There are Pending approvals older than 2 days - Must be reviewed!",
+        "alerts_exp": "🚨 There are cards expiring within 30 days!",
+        "companies_m": "Companies",
+        "addition_m": "Addition",
+        "deletion_m": "Deletion",
+        "upgrade_m": "Upgrade",
+        "pending_m": "Pending Approvals",
+        "total_m": "Total Requests",
+        "last_wa": "Last request saved ✅ - Send it on WhatsApp from here:",
+        "send_wa": "Send on WhatsApp",
+        "clear_wa": "Clear WhatsApp Message ❌",
+        "export_title": "📥 Export Report",
+        "export_choose": "Choose what to export",
+        "export_btn": "Download Excel Report 📥",
+        "export_save": "Click here to save the file 💾",
+        "search_title": "🔍 Search Member",
+        "search_ph": "Example: Ahmed or 2980101...",
+        "search_no_data": "No data yet",
+        "search_no": "No results for:",
+        "search_found": "Found result(s)",
+        "tab_comp": "🏢 Companies",
+        "tab_add": "➕ Addition",
+        "tab_del": "➖ Deletion",
+        "tab_upg": "⬆ Upgrade",
+        "tab_appr": "✅ Approvals",
+        "tab_analytics": "📊 Analytics",
+        "scan_title": "➕ Add New Member - By Scan",
+        "scan_cap": "Upload ID or card photo, system will fill data automatically, just review before Save",
+        "scan_tip": "💡 For successful Scan: Take photo straight not rotated, good light, clear text, not blurry.",
+        "scan_upload": "📸 Upload ID or Card Photo",
+        "scan_uploaded": "Uploaded Photo",
+        "scan_btn": "🔍 Scan and Fill Data Automatically",
+        "scan_reading": "Reading card... Please wait",
+        "scan_ok": "Read Successfully ✅",
+        "scan_card_no": "Card No",
+        "scan_nid_manual": "Complete National ID (14 digits) manually from ID card",
+        "scan_fail": "Could not read data - Photo is unclear. Retake photo straight, landscape, no flash, or type National ID (14 digits) manually below and DOB and Gender will be filled automatically.",
+        "scan_from_nid": "✅ From National ID: Date of Birth",
+        "scan_gender_label": "Gender",
+        "select_company": "Select Company",
+        "staff_id": "Staff ID",
+        "first_name": "First Name - From Scan",
+        "family_name": "Family Name",
+        "dependency": "Dependency",
+        "gender": "Gender",
+        "dob": "Date of Birth - From Scan or National ID",
+        "plan": "Plan - From Card",
+        "provider": "Insurance Provider - From Card",
+        "policy_num": "Policy Number",
+        "mobile": "Mobile Number",
+        "email": "Email ID",
+        "iban": "IBAN / Account Number",
+        "national_id": "National ID - From Scan or Type Manually (14 digits)",
+        "expiry": "Card Expiry Date",
+        "save_add": "Save Addition ✅",
+        "req_first": "First Name, Family Name and National ID are required",
+        "added": "Added",
+        "to": "to",
+        "print_card": "🪪 Print Member Card",
+        "select_nid": "Select Member by National ID",
+        "download_card": "Download Card for",
+        "my_title": "👤 My Insurance - My Data",
+        "my_card_data": "📋 My Card Data",
+        "my_card": "🪪 My Card",
+        "my_appr": "✅ My Approvals",
+        "my_upg": "⬆ My Upgrades",
+        "my_del": "➖ My Deletion Requests",
+        "my_no_appr": "No approvals yet",
+        "my_no_upg": "No upgrades",
+        "my_no_del": "No deletion requests",
+        "my_note": "If data is wrong, contact HR - You can view only, not edit",
+        "name_col": "Name",
+        "plan_col": "Plan",
+        "dep_col": "Dependency",
+        "add_company": "Add New Company",
+        "add_4_clients": "➕ Add the 4 Ready Clients",
+        "added_n": "Added",
+        "company_word": "companies",
+        "clients_exist": "The 4 clients already exist ✅",
+        "company_name": "Company Name *",
+        "policy_name": "Policy Name",
+        "hr_name": "HR Contact Name",
+        "hr_phone": "HR Phone / WhatsApp",
+        "members_count": "Members Count",
+        "save_company": "Save Company 🏢",
+        "company_required": "Company Name is required",
+        "added_ok": "added ✅",
+        "all_companies": "All Companies",
+        "no_companies": "No companies yet - Click Add the 4 Ready Clients above",
+        "approve_reject": "Approve / Reject",
+        "manual_nid_label": "Or type National ID manually here (if Scan failed - 14 digits)",
+        "manual_nid_help": "If ID photo is blurry, type National ID here and DOB + Gender will be filled automatically",
+        "plan_from_card": "* Plan - From Card",
+        "gender": "* Gender",
+
+        "my_title": "👤 My Insurance - My Data",
+        "my_card_data": "📋 My Card Data",
+        "my_card": "🪪 My Card",
+        "my_appr": "✅ My Approvals",
+        "my_upg": "⬆ My Upgrades",
+        "my_del": "➖ My Deletion Requests",
+        "my_note": "If data is wrong, contact HR - You can view only, not edit",
+        "wa_first": "Enter WhatsApp number in the Sidebar first",
+        "scan_ok_full": "Read Successfully ✅ - Name:",
+        "scan_nid_lbl": "National ID:",
+        "scan_dob_lbl": "DOB:",
+        "scan_gender_lbl": "Gender:",
+        "scan_name_ar_note": "✍️ Arabic name was read broken from the photo - Type it manually in Arabic or English in the form below, other data was filled from National ID.",
+        "print_card": "🪪 Print Member Card",
+        "del_title": "Delete Member - Damaged Card Photo Required",
+        "del_req": "First Name, Family Name and National ID are required",
+        "del_no_photo": "❌ Cannot delete without damaged card photo",
+        "upg_req": "First Name, Family Name and National ID are required",
+        "upg_same": "❌ New Plan must be different from Old Plan",
+        "appr_req": "Name and National ID are required",
+        "analytics_title": "📊 Analytics - Overview",
+        "monthly_title": "📅 Monthly Report",
+        "monthly_ok": "This is the report you can send to the company at the start of each month ✅",
+        "del_school": "Select Company",
+        "del_search": "Search by Name, National ID or Staff ID",
+        "del_choose": "Select Member to Delete",
+        "del_type": "Deletion Type",
+        "del_replacement": "Replacement - There is a replacement",
+        "del_final": "Final Deletion - No replacement",
+        "del_date": "Deletion Date",
+        "del_date_hint": "Deletion date cannot be in the future, and max 30 days in the past.",
+        "del_date_future": "❌ Deletion date cannot be in the future",
+        "del_date_old": "❌ Deletion date max 30 days in the past - Older is not allowed",
+        "del_confirm": "Confirm Deletion 🗑",
+        "del_reason": "Reason for Deletion",
+        "del_photo": "📷 Damaged Card Photo - Required",
+        "del_no_members": "No members in this company",
+        "del_no_match": "No matching member",
+        "del_done": "Deleted ✅ and moved to final sheet",
+
+    }
+}
+def T(k):
+    return TRANSLATIONS.get(LANG, TRANSLATIONS["ar"]).get(k, k)
+
 
 # --- NEW: Insurance Providers & Clients ---
 PROVIDERS = ["Sarwa Life", "Sarwa", "Orient", "AXA", "Gig Life", "Allianz / NextCare", "Allianz"]
@@ -512,35 +861,48 @@ def extract_from_id_image(image_file, manual_angle=0):
     debug += res.get("errors", [])
     debug.append(f"engine={res.get('engine')} warnings={res.get('warnings')} uncertain={res.get('uncertain')}")
     # لو tesseract بس هو اللي اشتغل ومفيش Claude، جرب OCR.space كاحتياطي أخير - من غير تثبيت
-    # لو الرقم القومي لسه مش موجود، جرب OCR.space حتى لو الكارت اتقرا
+    # لو الرقم القومي لسه مش موجود (صورة بطاقة مشوشة)، جرب OCR.space حتى لو الكارت اتقرا - كان شرطه القديم بيمنعه
     if not data.get("national_id") or (not data.get("name") and not data.get("card_no")):
         try:
             import urllib.request, urllib.parse, json as _json, base64 as _b64
             debug.append("Trying OCR.space (no install) as last fallback...")
-            # 4 لفات + عربي+انجليزي، وخد أحسن نتيجة فيها 14 رقم
+            # البطاقة ممكن تبقى مقلوبة 90 درجة وبالعربي - جرب 4 لفات + عربي+انجليزي وخد أحسن نتيجة فيها 14 رقم
+            _best_txt = ""
+            _best_score = -1
+            # استخدم الصورة الأصلية من غير قص - القص كان بيقطع بطاقة الرقم القومي
             import io as _io_raw
-            _raw_bytes = image_file.getvalue() if hasattr(image_file, "getvalue") else image_file.read()
-            try: image_file.seek(0)
-            except: pass
-            from PIL import Image as _PIL2
-            _img_base = _PIL2.open(_io_raw.BytesIO(_raw_bytes)).convert("RGB")
-            _best_txt, _best_score = "", -1
-            for _ang in [0, 90, 180, 270]:
-                _rot = _img_base.rotate(_ang, expand=True) if _ang!=0 else _img_base
-                _b = _io.BytesIO(); _rot.save(_b, "JPEG", quality=85)
-                _b64s = _b64.b64encode(_b.getvalue()).decode()
-                _payload = urllib.parse.urlencode({"apikey": "helloworld", "base64Image": f"data:image/jpeg;base64,{_b64s}", "language": "ara+eng", "isOverlayRequired": False, "OCREngine": "1", "scale": "true"}).encode()
-                _req = urllib.request.Request("https://api.ocr.space/parse/image", data=_payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
+            try:
+                _raw_bytes = image_file.getvalue() if hasattr(image_file, "getvalue") else image_file.read()
                 try:
-                    with urllib.request.urlopen(_req, timeout=30) as _resp:
-                        _r = _json.loads(_resp.read().decode())
+                    image_file.seek(0)
+                except:
+                    pass
+                from PIL import Image as _PIL2
+                _img_base = _PIL2.open(_io_raw.BytesIO(_raw_bytes)).convert("RGB")
+            except:
+                _jpeg_base, _img_base = prepare_image(image_file)
+            for _ang in [0, 90, 180, 270]:
+                try:
+                    _rot = _img_base.rotate(_ang, expand=True) if _ang != 0 else _img_base
+                    _b = _io.BytesIO()
+                    _rot.save(_b, "JPEG", quality=85)
+                    _b64_try = _b64.b64encode(_b.getvalue()).decode()
+                    _pay = urllib.parse.urlencode({"apikey": "helloworld", "base64Image": f"data:image/jpeg;base64,{_b64_try}", "language": "ara+eng", "isOverlayRequired": False, "OCREngine": "1", "scale": "true"}).encode()
+                    _rq = urllib.request.Request("https://api.ocr.space/parse/image", data=_pay, headers={"Content-Type": "application/x-www-form-urlencoded"})
+                    with urllib.request.urlopen(_rq, timeout=30) as _rp:
+                        _rj = _json.loads(_rp.read().decode())
                     _txt_try = ""
-                    try: _txt_try = _r["ParsedResults"][0]["ParsedText"] or ""
-                    except: _txt_try = ""
-                    _nid_try = re.findall(r"\d{14}", _txt_try.replace(" ",""))
+                    try:
+                        _txt_try = _rj["ParsedResults"][0]["ParsedText"] or ""
+                    except:
+                        _txt_try = ""
+                    _nid_try = __import__("re").findall(r"\d{14}", _txt_try.replace(" ", "").replace("\n", ""))
                     _score = len(_txt_try) + (1000 if _nid_try else 0)
-                    if _score > _best_score: _best_score, _best_txt = _score, _txt_try
-                except: continue
+                    if _score > _best_score:
+                        _best_score = _score
+                        _best_txt = _txt_try
+                except:
+                    continue
             _txt = _best_txt
             debug.append(f"OCR.space len {len(_txt)}: {_txt[:300]}")
             if _txt and len(_txt.strip()) > 10:
@@ -548,6 +910,24 @@ def extract_from_id_image(image_file, manual_angle=0):
                 _m = _re2.findall(r"\d{14}", _txt.replace(" ",""))
                 if _m:
                     data["national_id"] = _m[0]
+                    # من الرقم القومي نفسه: طلع تاريخ الميلاد والنوع - حتى لو الاسم بالعربي اتقرا مكسر
+                    try:
+                        _nid_v = _m[0]
+                        _cent = int(_nid_v[0]); _yy = int(_nid_v[1:3]); _mm = int(_nid_v[3:5]); _dd = int(_nid_v[5:7])
+                        _yyyy = (1900 if _cent==2 else 2000 if _cent==3 else 1900) + _yy
+                        from datetime import date as _d_nid
+                        data["dob"] = _d_nid(_yyyy, _mm, _dd).strftime("%Y-%m-%d")
+                        data["gender"] = "Female" if int(_nid_v[12])%2==0 else "Male"
+                    except:
+                        pass
+                    # الاسم بالعربي: أول سطر فيه 3 كلمات عربي، مش عنوان ولا مهنة
+                    if not data.get("name"):
+                        for _ln in _txt.split("\n"):
+                            _ln_s = _ln.strip()
+                            _arab = _re2.findall(r"[\u0600-\u06FF]{2,}", _ln_s)
+                            if len(_arab) >= 3 and "الرقم" not in _ln_s and "العنوان" not in _ln_s and "المهنة" not in _ln_s and "بطاقة" not in _ln_s:
+                                data["name"] = " ".join(_arab[:4])
+                                break
                 _cm = _re2.search(r"([A-F0-9]{10,})", _txt.replace(" ",""))
                 if _cm:
                     data["card_no"] = _cm.group(1)
@@ -656,15 +1036,6 @@ def generate_card_pdf(name, staff_id, national_id, plan, dependency, company="My
     buffer.seek(0)
     return buffer
 
-NOTIFY_EMAIL = "mahmoud.asmaa@gmail.com"
-
-# --- Language: عربي / English - صغير، مش بيشيل حاجة ---
-if "lang" not in st.session_state: st.session_state["lang"] = "ar"
-_lang_choice = st.sidebar.radio("🌐 اللغة / Language", ["العربية", "English"], index=0 if st.session_state["lang"]=="ar" else 1)
-st.session_state["lang"] = "ar" if _lang_choice=="العربية" else "en"
-LANG = st.session_state["lang"]
-def _L(ar, en): return ar if LANG=="ar" else en
-
 # --- LOGIN ---
 APP_USERNAME = "admin"
 APP_PASSWORD = "myshurance123"
@@ -707,14 +1078,14 @@ def load_sheet_gs(name):
         return pd.DataFrame()
 
 if not st.session_state["logged_in"]:
-    st.title("🔐 Myshurance - Login")
-    st.caption("Admin or Employee - اختار نوع الدخول")
-    login_type = st.radio("Login as:", ["👨💼 Admin", "👤 Employee - الموظف"], horizontal=True)
-    if login_type == "👨💼 Admin":
+    st.title(T("login_title"))
+    st.caption(T("login_sub"))
+    login_type = st.radio(T("login_as"), [T("admin"), T("employee")], horizontal=True)
+    if login_type == T("admin"):
         with st.form("login_form"):
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
-            login_btn = st.form_submit_button("Login as Admin", use_container_width=True)
+            u = st.text_input(T("username"))
+            p = st.text_input(T("password"), type="password")
+            login_btn = st.form_submit_button(T("login_admin"), use_container_width=True)
             if login_btn:
                 if u == APP_USERNAME and p == APP_PASSWORD:
                     st.session_state["logged_in"] = True
@@ -722,21 +1093,21 @@ if not st.session_state["logged_in"]:
                     st.success("Welcome Admin ✅")
                     st.rerun()
                 else:
-                    st.error("❌ Wrong username or password")
-        st.info("Default Admin: admin / myshurance123")
+                    st.error(T("wrong"))
+        st.info(T("default_admin"))
     else:
-        st.markdown("### 👤 Employee Self-Service")
-        st.caption("ادخل بالرقم القومي عشان تشوف بياناتك وموافقاتك")
+        st.markdown(f"### {T('emp_title')}")
+        st.caption(T("emp_sub"))
         with st.form("emp_login"):
-            emp_id = st.text_input("National ID - الرقم القومي *", placeholder="29xxxxxxxxxxxx")
-            emp_btn = st.form_submit_button("View My Data 👀", use_container_width=True)
+            emp_id = st.text_input(T("emp_nid"), placeholder="29xxxxxxxxxxxx")
+            emp_btn = st.form_submit_button(T("emp_btn"), use_container_width=True)
             if emp_btn:
                 if not emp_id:
-                    st.error("اكتب الرقم القومي")
+                    st.error(T("emp_empty"))
                 else:
                     df_check = load_sheet_gs("addition")
                     if df_check.empty:
-                        st.error("No data yet")
+                        st.error(T("emp_no_data"))
                     else:
                         col = None
                         for c in df_check.columns:
@@ -748,14 +1119,14 @@ if not st.session_state["logged_in"]:
                         else:
                             found = df_check[df_check[col].astype(str).str.strip() == emp_id.strip()]
                             if found.empty:
-                                st.error("❌ الرقم القومي مش موجود - كلم الـ HR")
+                                st.error(T("emp_not_found"))
                             else:
                                 st.session_state["logged_in"] = True
                                 st.session_state["role"] = "employee"
                                 st.session_state["emp_national_id"] = emp_id.strip()
                                 st.success("Welcome ✅")
                                 st.rerun()
-        st.info("الموظف بيدخل بالرقم القومي بس، من غير باسورد")
+        st.info(T("emp_note"))
     st.stop()
 
 def do_logout():
@@ -766,9 +1137,9 @@ def do_logout():
 
 # ================= EMPLOYEE PORTAL =================
 if st.session_state.get("role") == "employee":
-    st.sidebar.button("Logout 🚪", on_click=do_logout)
+    st.sidebar.button(T("logout"), on_click=do_logout)
     emp_id = st.session_state["emp_national_id"]
-    st.title("👤 My Insurance - بياناتي")
+    st.title(T("my_title"))
     st.caption(f"National ID: {emp_id}")
     df_add = load_sheet_gs("addition")
     df_del = load_sheet_gs("deletion")
@@ -792,7 +1163,7 @@ if st.session_state.get("role") == "employee":
     if my_data.empty:
         st.error("No data found")
         st.stop()
-    st.subheader("📋 My Card Data - بيانات الكارت")
+    st.subheader(T("my_card_data"))
     row = my_data.iloc[0]
     fname = row.get("* First Name", row.get("First Name", ""))
     lname = row.get("* Family Name", row.get("Family Name", ""))
@@ -804,34 +1175,34 @@ if st.session_state.get("role") == "employee":
     c2.metric("Plan", str(plan))
     c3.metric("Dependency", str(dep))
     st.dataframe(my_data, use_container_width=True)
-    st.subheader("🪪 My Card - كارت التأمين")
+    st.subheader(T("my_card"))
     pdf_buf = generate_card_pdf(f"{fname} {lname}", staff, emp_id, plan, dep)
     st.download_button("Download My Card PDF 🪪", data=pdf_buf, file_name=f"Card_{emp_id}.pdf", mime="application/pdf", use_container_width=True)
     st.divider()
-    st.subheader("✅ My Approvals - موافقاتي")
+    st.subheader(T("my_appr"))
     if my_appr.empty:
         st.info("No approvals yet")
     else:
         st.dataframe(my_appr, use_container_width=True)
     st.divider()
-    st.subheader("⬆ My Upgrades")
+    st.subheader(T("my_upg"))
     if my_upg.empty:
         st.info("No upgrades")
     else:
         st.dataframe(my_upg, use_container_width=True)
     st.divider()
-    st.subheader("➖ My Deletion Requests")
+    st.subheader(T("my_del"))
     if my_del.empty:
         st.info("No deletion requests")
     else:
         st.dataframe(my_del, use_container_width=True)
-    st.info("لو فيه بيانات غلط، كلم الـ HR - انت تقدر تشوف بس، مش تعدل")
+    st.info(T("my_note"))
     st.stop()
 
 # ================= ADMIN PORTAL =================
 st.sidebar.button("Logout 🚪", on_click=do_logout)
-st.title("Myshurance Hub")
-st.caption("Google Sheets Live - Companies / Addition / Deletion / Upgrade / Approvals / Analytics")
+st.title(T("hub_title"))
+st.caption(T("hub_sub"))
 
 def save_to_sheet_gs(sheet_name, new_row):
     ws = get_sheet().worksheet(sheet_name)
@@ -849,11 +1220,9 @@ def save_approvals_gs(df):
     for _, r in df.iterrows():
         ws.append_row([str(x) for x in r.tolist()])
 
-st.sidebar.header("📧 Email")
-st.sidebar.caption(f"Final Excel → {NOTIFY_EMAIL}")
-st.sidebar.header("📱 WhatsApp Settings")
-wa_number = st.sidebar.text_input("HR / Company WhatsApp Number", placeholder="2010xxxxxxxx", value="")
-st.sidebar.caption("الرقم اللي هيتبعتله التنبيه، بكود الدولة من غير +")
+st.sidebar.header(T("wa_title"))
+wa_number = st.sidebar.text_input(T("wa_num"), placeholder="2010xxxxxxxx", value="")
+st.sidebar.caption(T("wa_hint"))
 def wa_link(message):
     if not wa_number:
         return None
@@ -865,7 +1234,7 @@ def show_wa_button(message, label="Send on WhatsApp 📱"):
     if link:
         st.markdown(f"### [📱 {label} - دوس هنا]({link})")
     else:
-        st.warning("اكتب رقم الواتساب في الـ Sidebar الأول")
+        st.warning(T("wa_first"))
 
 df_add = load_sheet_gs("addition")
 df_del = load_sheet_gs("deletion")
@@ -879,14 +1248,14 @@ if df_comp.empty:
 
 pending = len(df_appr[df_appr["Status"] == "Pending"]) if not df_appr.empty and "Status" in df_appr.columns else 0
 # --- EXPIRY & PENDING ALERTS ---
-st.subheader("🔔 Alerts - تنبيهات")
+st.subheader(T("alerts"))
 alert_found = False
 if not df_appr.empty and "Status" in df_appr.columns and "Date" in df_appr.columns:
     try:
         df_appr["_d"] = pd.to_datetime(df_appr["Date"], errors="coerce")
         old_pending = df_appr[(df_appr["Status"]=="Pending") & (df_appr["_d"] < pd.Timestamp.now() - pd.Timedelta(days=2))]
         if not old_pending.empty:
-            st.warning(f"⚠ فيه {len(old_pending)} موافقة Pending بقالها أكتر من يومين - لازم تتراجع!")
+            st.warning(f"{T('alerts_old')} ({len(old_pending)})")
             st.dataframe(old_pending.drop(columns=["_d"]), use_container_width=True)
             alert_found = True
     except:
@@ -897,39 +1266,33 @@ if not df_add.empty and any("Expir" in c or "expir" in c for c in df_add.columns
         df_add["_exp"] = pd.to_datetime(df_add[exp_col], errors="coerce")
         soon = df_add[(df_add["_exp"] >= pd.Timestamp.now()) & (df_add["_exp"] <= pd.Timestamp.now() + pd.Timedelta(days=30))]
         if not soon.empty:
-            st.error(f"🚨 فيه {len(soon)} كارت هيخلص خلال 30 يوم!")
+            st.error(f"{T('alerts_exp')} ({len(soon)})")
             st.dataframe(soon.drop(columns=["_exp"]), use_container_width=True)
             alert_found = True
     except:
         pass
 if not alert_found:
-    st.success("✅ مفيش تنبيهات - كل حاجة تمام")
+    st.success(T("alerts_none"))
 st.divider()
 col1, col2, col3, col4, col5, col6 = st.columns(6)
-col1.metric("Companies", len(df_comp))
-col2.metric("Addition", len(df_add))
-col3.metric("Deletion", len(df_del))
-col4.metric("Upgrade", len(df_upg))
-col5.metric("Pending Approvals", pending)
-col6.metric("Total Requests", len(df_add) + len(df_del) + len(df_upg))
+col1.metric(T("companies_m"), len(df_comp))
+col2.metric(T("addition_m"), len(df_add))
+col3.metric(T("deletion_m"), len(df_del))
+col4.metric(T("upgrade_m"), len(df_upg))
+col5.metric(T("pending_m"), pending)
+col6.metric(T("total_m"), len(df_add) + len(df_del) + len(df_upg))
 st.divider()
-if "last_final_excel" in st.session_state:
-    st.success("📥 الشيت النهائي جاهز - Final Excel Ready - هيتبعت لشركة التأمين وفي نفس الوقت اتسجل في الشيت الأساسي (+1)")
-    st.download_button("📥 Download Final Excel - حمّل الشيت النهائي", data=st.session_state["last_final_excel"], file_name=st.session_state.get("last_final_excel_name","Final.xlsx"), mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-    st.caption(f"📧 الشيت النهائي هيتبعت على: {NOTIFY_EMAIL}")
-    st.caption("دوس على زرار التحميل، وبعدين ابعته على الإيميل ده - الشيت الأساسي اتحدث تلقائي (+1) من غير ما ترجع لشركة التأمين")
-    st.divider()
 if "last_wa_msg" in st.session_state:
-    st.success("آخر طلب اتسجل ✅ - ابعته واتساب من هنا:")
-    show_wa_button(st.session_state["last_wa_msg"], "Send Last Request on WhatsApp")
-    if st.button("Clear WhatsApp Message ❌"):
+    st.success(T("last_wa"))
+    show_wa_button(st.session_state["last_wa_msg"], T("send_wa"))
+    if st.button(T("clear_wa")):
         del st.session_state["last_wa_msg"]
         st.rerun()
     st.divider()
 
-st.subheader("📥 Export Report")
-export_type = st.selectbox("Choose what to export", ["All - Addition + Deletion + Upgrade", "Addition Only", "Deletion Only", "Upgrade Only", "Approvals Only", "Companies Only"])
-if st.button("Download Excel Report 📥", use_container_width=True):
+st.subheader(T("export_title"))
+export_type = st.selectbox(T("export_choose"), ["All - Addition + Deletion + Upgrade", "Addition Only", "Deletion Only", "Upgrade Only", "Approvals Only", "Companies Only"])
+if st.button(T("export_btn"), use_container_width=True):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         if export_type == "All - Addition + Deletion + Upgrade":
@@ -947,10 +1310,10 @@ if st.button("Download Excel Report 📥", use_container_width=True):
         else:
             df_upg.to_excel(writer, sheet_name="Upgrade", index=False)
     output.seek(0)
-    st.download_button(label="Click here to save the file 💾", data=output, file_name=f"Myshurance_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+    st.download_button(label=T("export_save"), data=output, file_name=f"Myshurance_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 st.divider()
-st.subheader("🔍 Search Member")
-search = st.text_input("Search by First Name, Family Name, Staff ID or National ID", placeholder="مثال: Ahmed أو 2980101...")
+st.subheader(T("search_title"))
+search = st.text_input(T("search_title"), placeholder=T("search_ph"))
 if search:
     search_lower = search.lower().strip()
     all_df = pd.DataFrame()
@@ -961,23 +1324,23 @@ if search:
     if not df_upg.empty:
         tmp = df_upg.copy(); tmp["Type"] = "Upgrade"; all_df = pd.concat([all_df, tmp], ignore_index=True)
     if all_df.empty:
-        st.info("No data yet")
+        st.info(T("search_no_data"))
     else:
         mask = all_df.astype(str).apply(lambda row: row.str.lower().str.contains(search_lower, na=False).any(), axis=1)
         result = all_df[mask]
         if result.empty:
-            st.warning(f"No results for: {search}")
+            st.warning(f"{T('search_no')} {search}")
         else:
-            st.success(f"Found {len(result)} result(s)")
+            st.success(f"{T('search_found')}: {len(result)}")
             st.dataframe(result, use_container_width=True)
     st.divider()
 
-tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏢 Companies", "➕ Addition", "➖ Deletion", "⬆ Upgrade", "✅ Approvals", "📊 Analytics"])
+tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs([T("tab_comp"), T("tab_add"), T("tab_del"), T("tab_upg"), T("tab_appr"), T("tab_analytics")])
 
 with tab0:
-    st.subheader("Add New Company")
+    st.subheader(T("add_company"))
     # زرار إضافة العملاء الأربعة مرة واحدة
-    if st.button("➕ أضف العملاء الأربعة الجاهزين (نيو سكول / بوب ليدرز / ليدرز انترناشونال / ليدرز كوليدج)", use_container_width=True):
+    if st.button(T("add_4_clients"), use_container_width=True):
         existing_names = df_comp["Company Name"].astype(str).tolist() if not df_comp.empty and "Company Name" in df_comp.columns else []
         added = 0
         for c in DEFAULT_CLIENTS:
@@ -985,46 +1348,46 @@ with tab0:
                 save_to_sheet_gs("companies", c)
                 added += 1
         if added > 0:
-            st.success(f"تم إضافة {added} شركة ✅")
+            st.success(f"{T('added_n')} {added} {T('company_word')} ✅")
             st.rerun()
         else:
-            st.info("العملاء الأربعة موجودين خلاص ✅")
+            st.info(T("clients_exist"))
     with st.form("comp_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        comp_name = c1.text_input("Company Name *")
-        comp_policy_name = c1.text_input("Policy Name / اسم الوثيقة")
-        comp_policy_num = c1.text_input("Policy Number / رقم الوثيقة")
-        comp_provider = c2.selectbox("Insurance Provider / شركة التأمين", PROVIDERS)
-        comp_hr = c1.text_input("HR Contact Name")
-        comp_phone = c2.text_input("HR Phone / WhatsApp")
-        comp_plan = c2.selectbox("Plan", ["Plan A", "Plan B", "Plan C"])
-        comp_members = c1.number_input("Members Count", min_value=0, step=1)
-        comp_sub = st.form_submit_button("Save Company 🏢", use_container_width=True)
+        comp_name = c1.text_input(T("company_name"))
+        comp_policy_name = c1.text_input(T("policy_name"))
+        comp_policy_num = c1.text_input(T("policy_num"))
+        comp_provider = c2.selectbox(T("provider"), PROVIDERS)
+        comp_hr = c1.text_input(T("hr_name"))
+        comp_phone = c2.text_input(T("hr_phone"))
+        comp_plan = c2.selectbox(T("plan"), ["Plan A", "Plan B", "Plan C"])
+        comp_members = c1.number_input(T("members_count"), min_value=0, step=1)
+        comp_sub = st.form_submit_button(T("save_company"), use_container_width=True)
         if comp_sub:
             if not comp_name:
-                st.error("Company Name مطلوب")
+                st.error(T("company_required"))
             else:
                 new_comp = {"Company Name": comp_name, "Policy Name": comp_policy_name or comp_name, "Policy Number": comp_policy_num, "Provider": comp_provider, "HR Contact": comp_hr, "HR Phone": comp_phone, "Plan": comp_plan, "Members Count": comp_members, "Created Date": datetime.now().strftime("%Y-%m-%d")}
                 save_to_sheet_gs("companies", new_comp)
-                st.success(f"Company {comp_name} added ✅")
+                st.success(f"{T('company_word')} {comp_name} {T('added_ok')}")
                 st.rerun()
     st.divider()
-    st.subheader("All Companies - العملاء")
+    st.subheader(T("all_companies"))
     if df_comp.empty:
-        st.info("No companies yet - دوس على زرار إضافة العملاء الأربعة فوق")
+        st.info(T("no_companies"))
     else:
         st.dataframe(df_comp, use_container_width=True)
 
 with tab1:
 
-    st.subheader("➕ Add New Member - إضافة بالـ Scan")
-    st.caption("ارفع صورة البطاقة أو الكارنيه، السيستم هيملي البيانات لوحده، انت راجع بس قبل ما تدوس Save")
-    st.info("💡 عشان الـ Scan ينجح: صور البطاقة **معدولة مش مقلوبة**، في نور كويس، والكلام واضح ومش مهزوز.")
-    scan_file = st.file_uploader("📸 ارفع صورة البطاقة أو الكارنيه", type=["jpg","jpeg","png"], key="scan_id")
+    st.subheader(T("scan_title"))
+    st.caption(T("scan_cap"))
+    st.info(T("scan_tip"))
+    scan_file = st.file_uploader(T("scan_upload"), type=["jpg","jpeg","png"], key="scan_id")
     if scan_file is not None:
-        st.image(scan_file, caption="الصورة اللي اترفعت", width=350)
-        if st.button("🔍 اعمل Scan واملا البيانات لوحدها", use_container_width=True):
-            with st.spinner("بقرا البطاقة... ثواني"):
+        st.image(scan_file, caption=T("scan_uploaded"), width=350)
+        if st.button(T("scan_btn"), use_container_width=True):
+            with st.spinner(T("scan_reading")):
                 res = extract_from_id_image(scan_file, manual_angle=0)
                 st.session_state["scan_name"] = res["name"]
                 st.session_state["scan_dob"] = res["dob"]
@@ -1034,12 +1397,17 @@ with tab1:
                 st.session_state["scan_plan"] = res.get("plan","")
                 st.session_state["scan_gender"] = res.get("gender","")
                 st.session_state["scan_done"] = True
-            if res["name"] or res.get("card_no"):
-                st.success(f"تم القراءة ✅ - {res['name']} | رقم الكارت: {res.get('card_no','')}")
-                if res.get("card_no"):
-                    st.info(f"🪪 رقم الكارت: {res['card_no']} - والرقم القومي (14 رقم) كمله يدوي من البطاقة الشخصية")
+            if res["name"] or res.get("national_id") or res.get("card_no"):
+                if res.get("national_id"):
+                    st.success(f"{T('scan_ok_full')} {res['name'] or T('scan_name_ar_note')[:0] or '' } | {T('scan_nid_lbl')} {res['national_id']} | {T('scan_dob_lbl')} {res['dob']} | {T('scan_gender_lbl')} {res.get('gender','')} | {T('scan_card_no')} {res.get('card_no','')}")
+                    if not res["name"]:
+                        st.info(T("scan_name_ar_note"))
+                else:
+                    st.success(f"{T('scan_ok')} - {res['name']} | {T('scan_card_no')}: {res.get('card_no','')}")
+                    if res.get("card_no"):
+                        st.info(f"🪪 {T('scan_card_no')}: {res['card_no']} - {T('scan_nid_manual')}")
             else:
-                st.warning("مقدرتش أقرا البيانات - اتأكد ان الصورة واضحة وحاول تاني")
+                st.warning(T("scan_fail"))
     if "scan_name" not in st.session_state:
         st.session_state["scan_name"] = ""
         st.session_state["scan_dob"] = ""
@@ -1084,21 +1452,8 @@ with tab1:
     if _def_plan not in _plan_options:
         _def_plan = "Plan A"
 
-    # بوكس الرقم القومي اليدوي - بره الفورم عشان يحدّث الميلاد والنوع فورا - _manual_gender متعرف قبل ما يتستخدم
-    _manual_nid_input = st.text_input(_L("أو اكتب الرقم القومي يدوي هنا (لو السكان فشل - 14 رقم)", "Or type National ID manually here (if Scan failed - 14 digits)"), value=st.session_state.get("scan_nid",""), key="manual_nid_box", max_chars=14)
-    _manual_dob = None; _manual_gender = ""
-    _manual_src = (_manual_nid_input or "").strip()
-    if len(_manual_src)==14 and _manual_src.isdigit():
-        try:
-            _cent_m = int(_manual_src[0]); _yy_m = int(_manual_src[1:3]); _mm_m = int(_manual_src[3:5]); _dd_m = int(_manual_src[5:7])
-            _yyyy_m = (1900 if _cent_m==2 else 2000 if _cent_m==3 else 1900) + _yy_m
-            _manual_dob = date(_yyyy_m, _mm_m, _dd_m)
-            _manual_gender = "Female" if int(_manual_src[12])%2==0 else "Male"
-            st.session_state["scan_nid"] = _manual_src; _def_dob = _manual_dob; _def_gender = _manual_gender
-            st.info(f"{_L('تاريخ الميلاد من الرقم القومي:','DOB from National ID:')} {_manual_dob} | {_L('النوع:','Gender:')} {_L('أنثى' if _manual_gender=='Female' else 'ذكر', _manual_gender)}")
-        except: pass
     comp_options = df_comp["Company Name"].tolist() if not df_comp.empty else ["No Company"]
-    selected_comp = st.selectbox(_L("اختار الشركة", "Select Company"), comp_options)
+    selected_comp = st.selectbox(T("select_company"), comp_options)
     # عرض Policy Number و Provider للشركة المختارة
     if not df_comp.empty and selected_comp in df_comp["Company Name"].astype(str).tolist():
         crow = df_comp[df_comp["Company Name"].astype(str) == selected_comp].iloc[0]
@@ -1106,48 +1461,59 @@ with tab1:
         prov = crow.get("Provider", "")
         if pnum or prov:
             st.info(f"📌 Policy: {crow.get('Policy Name','')} | Number: {pnum} | Provider: {prov}")
+    # --- Manual NID fallback: لو السكان فشل (صورة مشوشة زي اللي في السكرين)، اكتب الرقم القومي هنا بره الفورم ---
+    # ده بره الفورم عشان Streamlit يحدّث تاريخ الميلاد والنوع فورا أول ما تكتب الرقم
+    _manual_nid_input = st.text_input(T("manual_nid_label"), value=st.session_state.get("scan_nid",""), key="manual_nid_box", max_chars=14, help=T("manual_nid_help"))
+    _manual_dob = None
+    _manual_gender = ""
+    _manual_src = (_manual_nid_input or "").strip()
+    if len(_manual_src)==14 and _manual_src.isdigit():
+        try:
+            _cent_m = int(_manual_src[0]); _yy_m = int(_manual_src[1:3]); _mm_m = int(_manual_src[3:5]); _dd_m = int(_manual_src[5:7])
+            _yyyy_m = (1900 if _cent_m==2 else 2000 if _cent_m==3 else 1900) + _yy_m
+            _manual_dob = date(_yyyy_m, _mm_m, _dd_m)
+            _manual_gender = "Female" if int(_manual_src[12])%2==0 else "Male"
+            # خلي الـ Scan يستخدم الرقم اليدوي ده
+            st.session_state["scan_nid"] = _manual_src
+            if _manual_dob:
+                _def_dob = _manual_dob
+            if _manual_gender:
+                _def_gender = _manual_gender
+            st.info(f"{T('scan_from_nid')} {_manual_dob.strftime('%Y-%m-%d')} | {T('scan_gender_label')} {_manual_gender}")
+        except Exception:
+            pass
     with st.form("add_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        staff_id = c1.text_input("Staff ID")
-        first_name = c1.text_input("* First Name - من الـ Scan", value=_def_first)
-        family_name = c2.text_input("* Family Name - باقي الاسم", value=_def_family)
-        _dep_display = [_L("موظف","Employee"), _L("زوج / زوجة","Spouse"), _L("ابن / ابنة","Child"), _L("أب / أم","Parent")]
-        _dep_values = ["Employee", "Spouse", "Child", "Parent"]
-        dependency = _dep_values[_dep_display.index(c2.selectbox(_L("* صلة القرابة","* Dependency"), _dep_display))]
-        _gender_display = [_L("ذكر","Male"), _L("أنثى","Female")]
-        _gender_values = ["Male", "Female"]
-        gender = _gender_values[_gender_display.index(c1.selectbox(_L("* النوع","* Gender"), _gender_display, index=0 if (_manual_gender or _def_gender)=="Male" else 1))]
-        dob = c1.date_input("* Date of Birth - من الـ Scan", value=_def_dob)
-        _plan_display = [_L("الخطة أ","Plan A"), _L("الخطة ب","Plan B"), _L("الخطة ج","Plan C"), _L("الخطة د","Plan D")]
-        _plan_values = ["Plan A", "Plan B", "Plan C", "Plan D"]
-        plan = _plan_values[_plan_display.index(c2.selectbox(_L("* الخطة - من الكارت","* Plan - From Card"), _plan_display, index=_plan_values.index(_def_plan) if _def_plan in _plan_values else 0))]
-        provider_add = c1.selectbox("Insurance Provider / شركة التأمين - من الكارت", _prov_options, index=_prov_options.index(_def_provider) if _def_provider in _prov_options else 0)
-        policy_num_add = c1.text_input("Policy Number / رقم الوثيقة")
-        mobile = c2.text_input("* Mobile Number")
-        email = c1.text_input("Email ID")
-        iban = c2.text_input("* IBAN / Account Number")
-        national_id = c1.text_input("* National ID - من الـ Scan", value=st.session_state.get("scan_nid",""))
-        expiry_date = c2.date_input("Card Expiry Date")
-        addition_date = c1.date_input(_L("تاريخ الإضافة", "Addition Date"), value=date.today())
-        submitted = st.form_submit_button("Import to Excel Sheet 📥 - إضافة للشيت النهائي + الشيت الأساسي", use_container_width=True)
+        staff_id = c1.text_input(T("staff_id"))
+        first_name = c1.text_input(T("first_name"), value=_def_first)
+        family_name = c2.text_input(T("family_name"), value=_def_family)
+        dependency = c2.selectbox(T("dependency"), ["Employee", "Spouse", "Child", "Parent"] if LANG=="en" else ["Employee", "Spouse", "Child", "Parent"])
+        gender = c1.selectbox(T("gender"), ["Male", "Female"], index=0 if (_manual_gender or _def_gender)=="Male" else 1)
+        dob = c1.date_input(T("dob"), value=_def_dob)
+        plan = c2.selectbox(T("plan_from_card"), ["Plan A", "Plan B", "Plan C", "Plan D"], index=["Plan A","Plan B","Plan C","Plan D"].index(_def_plan) if _def_plan in ["Plan A","Plan B","Plan C","Plan D"] else 0)
+        provider_add = c1.selectbox(T("provider"), _prov_options, index=_prov_options.index(_def_provider) if _def_provider in _prov_options else 0)
+        policy_num_add = c1.text_input(T("policy_num"))
+        mobile = c2.text_input(T("mobile"))
+        email = c1.text_input(T("email"))
+        iban = c2.text_input(T("iban"))
+        national_id = c1.text_input(T("national_id"), value=st.session_state.get("scan_nid",""))
+        # الرقم القومي اليدوي بيتقرا من البوكس اللي فوق الفورم (بره الفورم) - جوة الفورم مينفعش يحدّث DOB في نفس الرندر
+        if national_id and len(national_id.strip())==14 and national_id.strip().isdigit():
+            try:
+                pass
+            except:
+                pass
+        expiry_date = c2.date_input(T("expiry"))
+        submitted = st.form_submit_button(T("save_add"), use_container_width=True)
         if submitted:
             if not first_name or not family_name or not national_id:
-                st.error("First Name و Family Name و National ID مطلوبين")
+                st.error(T("req_first"))
             else:
-                new_row = {"Staff ID": staff_id, "* First Name": first_name, "* Family Name": family_name, "* Dependency": dependency, "* Gender": gender, "* Date of Birth": str(dob), "* Plan": plan, "Provider": provider_add, "Policy Number": policy_num_add, "Company": selected_comp, "* Mobile Number": mobile, "Email ID": email, "* IBAN/Account Number": iban, "* National ID": national_id, "Card Expiry Date": str(expiry_date), "Addition Date": str(addition_date), "Card No": st.session_state.get("scan_card","")}
+                new_row = {"Staff ID": staff_id, "* First Name": first_name, "* Family Name": family_name, "* Dependency": dependency, "* Gender": gender, "* Date of Birth": str(dob), "* Plan": plan, "Provider": provider_add, "Policy Number": policy_num_add, "Company": selected_comp, "* Mobile Number": mobile, "Email ID": email, "* IBAN/Account Number": iban, "* National ID": national_id, "Card Expiry Date": str(expiry_date)}
                 save_to_sheet_gs("addition", new_row)
                 st.success(f"Added {first_name} {family_name} to {selected_comp} ✅")
                 msg = f"New Addition Request - Myshurance:\nCompany: {selected_comp}\nProvider: {provider_add}\nPolicy: {policy_num_add}\nName: {first_name} {family_name}\nStaff ID: {staff_id}\nNational ID: {national_id}\nPlan: {plan}\nMobile: {mobile}"
                 st.session_state["last_wa_msg"] = msg
-                # Import to Excel Sheet: Final Excel for insurance + main list (+1) at same time
-                import io as _io_final
-                _final_df = pd.DataFrame([new_row])
-                _buf_final = _io_final.BytesIO()
-                with pd.ExcelWriter(_buf_final, engine="openpyxl") as _w:
-                    _final_df.to_excel(_w, sheet_name="Final_Addition", index=False)
-                _buf_final.seek(0)
-                st.session_state["last_final_excel"] = _buf_final.getvalue()
-                st.session_state["last_final_excel_name"] = f"Final_Addition_{first_name}_{family_name}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
                 for _k in ["scan_name","scan_dob","scan_nid","scan_done","scan_card","scan_provider","scan_plan","scan_gender"]:
                     if _k in st.session_state:
                         del st.session_state[_k]
@@ -1159,7 +1525,7 @@ with tab1:
     else:
         st.dataframe(df_add, use_container_width=True)
         st.divider()
-        st.subheader("🪪 Print Member Card - طباعة الكارت")
+        st.subheader(T("print_card"))
         nid_col = None
         for c in df_add.columns:
             if "National" in c:
@@ -1177,86 +1543,101 @@ with tab1:
             st.download_button(f"Download Card for {s_fname} {s_lname} 🪪", data=pdf_buf, file_name=f"Card_{selected_nid}.pdf", mime="application/pdf", use_container_width=True)
 
 with tab2:
-    st.subheader(_L("حذف عضو - لازم صورة الكارت التالف", "Delete Member - Damaged Card Photo Required"))
+    st.subheader(T("del_title"))
+    # 1 - اختار الشركة
     _del_companies = df_comp["Company Name"].astype(str).tolist() if not df_comp.empty and "Company Name" in df_comp.columns else []
     if not _del_companies:
-        st.info(_L("مفيش شركات لسه", "No companies yet"))
+        st.info(T("no_companies"))
     else:
-        _del_comp = st.selectbox(_L("اختار المدرسة / الشركة", "Select School / Company"), _del_companies, key="del_company")
+        _del_comp = st.selectbox(T("del_school"), _del_companies, key="del_company")
+        # أعضاء الشركة دي بس - من شيت addition
         _members = pd.DataFrame()
-        if not df_add.empty and "Company" in df_add.columns:
-            _members = df_add[df_add["Company"].astype(str)==str(_del_comp)].copy()
+        if not df_add.empty:
+            _comp_col = "Company" if "Company" in df_add.columns else None
+            if _comp_col:
+                _members = df_add[df_add[_comp_col].astype(str) == str(_del_comp)].copy()
+            else:
+                _members = df_add.copy()
         if _members.empty:
-            st.info(_L("مفيش أعضاء في المدرسة دي", "No members in this school"))
+            st.info(T("del_no_members"))
         else:
-            _q = st.text_input(_L("دوّر بالاسم - اكتب حرف ف يطلعلك كل فاطمة", "Search by name - type F to see all Fatima"), key="del_search")
+            # 2 - دوّر بالاسم / الرقم القومي / رقم الموظف
+            _q = st.text_input(T("del_search"), placeholder="Ahmed / 2980101 / 123", key="del_search")
             _filtered = _members
             if _q:
                 _ql = _q.lower().strip()
-                _filtered = _members[_members.astype(str).apply(lambda row: row.str.lower().str.contains(_ql, na=False).any(), axis=1)]
+                _mask = _members.astype(str).apply(lambda row: row.str.lower().str.contains(_ql, na=False).any(), axis=1)
+                _filtered = _members[_mask]
             if _filtered.empty:
-                st.warning(_L("مفيش عضو مطابق", "No matching member"))
+                st.warning(T("del_no_match"))
             else:
+                # 3 - اختار العضو
                 def _label(r):
-                    return f"{r.get('* First Name', r.get('First Name',''))} {r.get('* Family Name', r.get('Family Name',''))} | {r.get('* National ID', r.get('National ID',''))} | {r.get('Staff ID','')}"
+                    _fn = r.get("* First Name", r.get("First Name", ""))
+                    _ln = r.get("* Family Name", r.get("Family Name", ""))
+                    _nid = r.get("* National ID", r.get("National ID", ""))
+                    _sid = r.get("Staff ID", "")
+                    return f"{_fn} {_ln} | {_nid} | {_sid}"
                 _opts = [_label(r) for _, r in _filtered.iterrows()]
-                _sel_label = st.selectbox(_L("اختار العضو اللي هتحذفه", "Select Member to Delete"), _opts, key="del_choose")
-                _sel_row = _filtered.iloc[_opts.index(_sel_label)]
-                st.dataframe(_filtered.iloc[[_opts.index(_sel_label)]], use_container_width=True)
+                _sel_label = st.selectbox(T("del_choose"), _opts, key="del_choose")
+                _sel_idx = _opts.index(_sel_label)
+                _sel_row = _filtered.iloc[_sel_idx]
+                st.dataframe(_filtered.iloc[[_sel_idx]], use_container_width=True)
+                # 4 - استبدال ولا حذف نهائي + تاريخ الحذف + صورة الكارت التالف
                 with st.form("del_form", clear_on_submit=True):
                     c1, c2 = st.columns(2)
-                    # جنب الشخص: 1- إصدار بدل فاقد / 2- حذف العضو - زرارين جنب بعض
-                    st.markdown(f"**{_L('اختار جنب الشخص:', 'Choose beside the person:')}**")
-                    _b1, _b2 = st.columns(2)
-                    if "del_action" not in st.session_state: st.session_state["del_action"] = "Final Deletion"
-                    if _b1.button("1- إصدار بدل فاقد 🪪 / Replacement Card", use_container_width=True, key="del_btn_repl"):
-                        st.session_state["del_action"] = "Replacement"
-                    if _b2.button("2- حذف العضو 🗑 / Delete Member", use_container_width=True, key="del_btn_final"):
-                        st.session_state["del_action"] = "Final Deletion"
-                    _del_action_now = st.session_state.get("del_action", "Final Deletion")
-                    st.info(f"{_L('اللي اخترته دلوقتي:', 'You selected now:')} { _L('1- إصدار بدل فاقد', '1- Replacement Card') if _del_action_now=='Replacement' else _L('2- حذف العضو', '2- Delete Member')}")
-                    _del_type = _del_action_now
-                    _del_date = c2.date_input(_L("تاريخ الحذف", "Deletion Date"), value=date.today())
-                    st.caption(_L("تاريخ الحذف ميبقاش في المستقبل، وأقصى حاجة 30 يوم فاتوا.", "Deletion date cannot be in the future, max 30 days in the past."))
-                    _del_reason = st.text_area(_L("سبب الحذف", "Reason for Deletion"))
-                    _del_photo = st.file_uploader(_L("📷 صورة الكارت التالف - إجباري", "📷 Damaged Card Photo - Required"), type=["jpg", "jpeg", "png"])
-                    _d_sub = st.form_submit_button(_L("تأكيد الحذف 🗑", "Confirm Deletion 🗑"), use_container_width=True)
+                    _del_type = c1.radio(T("del_type"), [T("del_replacement"), T("del_final")], horizontal=True)
+                    _del_date = c2.date_input(T("del_date"), value=date.today())
+                    st.caption(T("del_date_hint"))
+                    _del_reason = st.text_area(T("del_reason"))
+                    _del_photo = st.file_uploader(T("del_photo"), type=["jpg", "jpeg", "png"])
+                    _d_sub = st.form_submit_button(T("del_confirm"), use_container_width=True)
                     if _d_sub:
                         _today = date.today()
+                        _delta = (_today - _del_date).days
                         if _del_date > _today:
-                            st.error(_L("❌ تاريخ الحذف مينفعش يبقى في المستقبل", "❌ Deletion date cannot be in the future"))
-                        elif (_today - _del_date).days > 30:
-                            st.error(_L("❌ تاريخ الحذف أقصاه 30 يوم فاتوا", "❌ Deletion date max 30 days in the past"))
+                            st.error(T("del_date_future"))
+                        elif _delta > 30:
+                            st.error(T("del_date_old"))
                         elif _del_photo is None:
-                            st.error(_L("❌ مينفعش حذف من غير صورة الكارت التالف", "❌ Cannot delete without damaged card photo"))
+                            st.error(T("del_no_photo"))
                         else:
-                            _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            _timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                             _nid_val = str(_sel_row.get("* National ID", _sel_row.get("National ID", "")))
-                            _photo_name = f"{_nid_val}_{_ts}.{_del_photo.name.split('.')[-1]}"
-                            with open(os.path.join(PHOTOS_DIR, _photo_name), "wb") as _f: _f.write(_del_photo.getbuffer())
-                            # الصف كله من الشيت الأصلي بيتنقل تلقائي للشيت النهائي
-                            _new_row = dict(_sel_row.to_dict())
-                            _new_row.update({"Company": _del_comp, "Deletion Type": _del_type, "Deletion Date": str(_del_date), "Reason": _del_reason, "Damaged Photo": _photo_name})
-                            save_to_sheet_gs("deletion", _new_row)
-                            # Final Excel for insurance
-                            import io as _io_del
-                            _del_final_df = pd.DataFrame([_new_row])
-                            _buf_del = _io_del.BytesIO()
-                            with pd.ExcelWriter(_buf_del, engine="openpyxl") as _wd:
-                                _del_final_df.to_excel(_wd, sheet_name="Final_Deletion", index=False)
-                            _buf_del.seek(0)
-                            st.session_state["last_final_excel"] = _buf_del.getvalue()
-                            st.session_state["last_final_excel_name"] = f"Final_Deletion_{_new_row.get('* First Name','')}_{_new_row.get('* Family Name','')}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-                            st.success(_L("تم الحذف ✅ واتنقل للشيت النهائي", "Deleted ✅ and moved to final sheet"))
-                            if _del_type == "Replacement":
-                                _repl_pdf = generate_card_pdf(f"{_new_row.get('* First Name','')} {_new_row.get('* Family Name','')}", _new_row.get("Staff ID",""), _nid_val, _sel_row.get("* Plan",""), _sel_row.get("* Dependency",""), _del_comp)
-                                st.download_button("🪪 حمّل بدل فاقد - Download Replacement Card PDF", data=_repl_pdf, file_name=f"Replacement_{_nid_val}.pdf", mime="application/pdf", use_container_width=True)
-                            st.session_state["last_wa_msg"] = f"Deletion Request - Myshurance:\nCompany: {_del_comp}\nName: {_new_row.get('* First Name','')} {_new_row.get('* Family Name','')}\nStaff ID: {_new_row.get('Staff ID','')}\nNational ID: {_nid_val}\nType: {_del_type}\nDeletion Date: {_del_date}\nReason: {_del_reason}\nDamaged card photo saved."
+                            _photo_name = f"{_nid_val}_{_timestamp}.{_del_photo.name.split('.')[-1]}"
+                            with open(os.path.join(PHOTOS_DIR, _photo_name), "wb") as _f:
+                                _f.write(_del_photo.getbuffer())
+                            _new_row = {
+                                "Staff ID": _sel_row.get("Staff ID", ""),
+                                "* First Name": _sel_row.get("* First Name", _sel_row.get("First Name", "")),
+                                "* Family Name": _sel_row.get("* Family Name", _sel_row.get("Family Name", "")),
+                                "* Dependency": _sel_row.get("* Dependency", _sel_row.get("Dependency", "")),
+                                "* Gender": _sel_row.get("* Gender", _sel_row.get("Gender", "")),
+                                "* Date of Birth": _sel_row.get("* Date of Birth", _sel_row.get("Date of Birth", "")),
+                                "* Plan": _sel_row.get("* Plan", _sel_row.get("Plan", "")),
+                                "* Mobile Number": _sel_row.get("* Mobile Number", ""),
+                                "Email ID": _sel_row.get("Email ID", ""),
+                                "* IBAN/Account Number": _sel_row.get("* IBAN/Account Number", ""),
+                                "* National ID": _nid_val,
+                                "Company": _del_comp,
+                                "Deletion Type": _del_type,
+                                "Deletion Date": str(_del_date),
+                                "Reason": _del_reason,
+                                "Damaged Photo": _photo_name,
+                            }
+                            # الشيت النهائي للحذف - لو مش موجود هيتخلق لوحده
+                            try:
+                                save_to_sheet_gs("deletion", _new_row)
+                            except Exception:
+                                save_to_sheet_gs("deletion", _new_row)
+                            st.success(T("del_done"))
+                            _msg = f"Deletion Request - Myshurance:\nCompany: {_del_comp}\nName: {_new_row['* First Name']} {_new_row['* Family Name']}\nStaff ID: {_new_row['Staff ID']}\nNational ID: {_nid_val}\nType: {_del_type}\nDeletion Date: {_del_date}\nReason: {_del_reason}\nDamaged card photo saved."
+                            st.session_state["last_wa_msg"] = _msg
                             st.rerun()
     st.divider()
-    st.subheader(_L("طلبات الحذف", "Deletion Requests"))
+    st.subheader("Deletion Requests")
     if df_del.empty:
-        st.info(_L("مفيش طلبات حذف لسه", "No deletion requests yet"))
+        st.info("No deletion requests yet")
     else:
         st.dataframe(df_del, use_container_width=True)
 
@@ -1274,9 +1655,9 @@ with tab3:
         u_submitted = st.form_submit_button("Confirm Upgrade ⬆", use_container_width=True)
         if u_submitted:
             if not u_first or not u_family or not u_national:
-                st.error("First Name و Family Name و National ID مطلوبين")
+                st.error(T("del_req"))
             elif old_plan == new_plan:
-                st.error("❌ New Plan لازم تكون مختلفة عن Old Plan")
+                st.error(T("upg_same"))
             else:
                 new_row = {"Staff ID": u_staff, "* First Name": u_first, "* Family Name": u_family, "* Dependency": "", "* Gender": "", "* Date of Birth": "", "* Plan": f"{old_plan} -> {new_plan}", "* Mobile Number": "", "Email ID": "", "* IBAN/Account Number": "", "* National ID": u_national}
                 save_to_sheet_gs("up grade", new_row)
@@ -1304,7 +1685,7 @@ with tab4:
         a_sub = st.form_submit_button("Submit Approval ✅", use_container_width=True)
         if a_sub:
             if not a_name or not a_national:
-                st.error("Name و National ID مطلوبين")
+                st.error(T("appr_req"))
             else:
                 new_id = f"AP-{len(df_appr)+1:04d}"
                 new_appr = {"ID": new_id, "Name": a_name, "National ID": a_national, "Type": a_type, "Provider": a_provider, "Hospital": a_hospital, "Amount": a_amount, "Status": "Pending", "Date": datetime.now().strftime("%Y-%m-%d %H:%M")}
@@ -1322,7 +1703,7 @@ with tab4:
         show_df = df_appr if status_filter == "All" else df_appr[df_appr["Status"] == status_filter]
         st.dataframe(show_df, use_container_width=True)
         st.divider()
-        st.subheader("Approve / Reject")
+        st.subheader(T("approve_reject"))
         if not show_df.empty:
             selected_id = st.selectbox("Select Approval ID", show_df["ID"].tolist())
             col_a, col_b = st.columns(2)
@@ -1338,7 +1719,7 @@ with tab4:
                 st.rerun()
 
 with tab5:
-    st.subheader("📊 Analytics - نظرة عامة")
+    st.subheader(T("analytics_title"))
     if not df_add.empty and "* Plan" in df_add.columns:
         st.markdown("### Members by Plan")
         st.bar_chart(df_add["* Plan"].value_counts())
@@ -1361,7 +1742,7 @@ with tab5:
     else:
         st.info("No approvals yet for chart")
         st.divider()
-    st.subheader("📅 Monthly Report - تقرير شهري")
+    st.subheader(T("monthly_title"))
     sel_month = st.selectbox("Select Month", ["Current Month - الشهر الحالي", "All Time - كل الوقت"])
     if st.button("Generate Monthly Report 📊", use_container_width=True):
         st.markdown("### Myshurance Monthly Summary")
@@ -1376,7 +1757,7 @@ with tab5:
                 st.write(f"💰 Total Approved Amount: {df_appr[df_appr['Status']=='Approved']['Amount'].astype(float).sum():,.0f}")
             except:
                 pass
-        st.success("ده التقرير اللي ممكن تبعته للشركة كل أول شهر ✅")
+        st.success(T("monthly_ok"))
     if not df_comp.empty and "Members Count" in df_comp.columns:
         st.markdown("### Companies by Members Count")
         try:
