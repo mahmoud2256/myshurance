@@ -40,6 +40,12 @@ DEFAULT_CLIENTS = [
 ]
 
 # ===== OCR from v4_2 ocr.py - شغال معاك =====
+import re
+import base64
+import io as _io_ocr
+from datetime import date as _date_ocr
+from PIL import Image, ImageEnhance, ImageOps
+
 
 # --- Helpers to replace store.py (S.*) - same logic as v4_2 store.py ---
 def _S_secret(key):
