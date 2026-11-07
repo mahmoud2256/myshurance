@@ -163,6 +163,11 @@ TRANSLATIONS = {
         "all_companies": "كل الشركات",
         "no_companies": "مفيش شركات لسه - دوس على زرار إضافة العملاء الأربعة فوق",
         "approve_reject": "قبول / رفض",
+        "manual_nid_label": "أو اكتب الرقم القومي يدوي هنا (لو السكان فشل - 14 رقم)",
+        "manual_nid_help": "لو صورة البطاقة مشوشة، اكتب الرقم القومي هنا وهيطلعلك تاريخ الميلاد والنوع لوحدهم",
+        "plan_from_card": "* الخطة - من الكارت",
+        "gender": "* النوع",
+
         "my_title": "👤 تأميني - بياناتي",
         "my_card_data": "📋 بيانات الكارت",
         "my_card": "🪪 الكارت بتاعي",
@@ -321,6 +326,11 @@ TRANSLATIONS = {
         "all_companies": "All Companies",
         "no_companies": "No companies yet - Click Add the 4 Ready Clients above",
         "approve_reject": "Approve / Reject",
+        "manual_nid_label": "Or type National ID manually here (if Scan failed - 14 digits)",
+        "manual_nid_help": "If ID photo is blurry, type National ID here and DOB + Gender will be filled automatically",
+        "plan_from_card": "* Plan - From Card",
+        "gender": "* Gender",
+
         "my_title": "👤 My Insurance - My Data",
         "my_card_data": "📋 My Card Data",
         "my_card": "🪪 My Card",
@@ -851,7 +861,8 @@ def extract_from_id_image(image_file, manual_angle=0):
     debug += res.get("errors", [])
     debug.append(f"engine={res.get('engine')} warnings={res.get('warnings')} uncertain={res.get('uncertain')}")
     # لو tesseract بس هو اللي اشتغل ومفيش Claude، جرب OCR.space كاحتياطي أخير - من غير تثبيت
-    if not data.get("name") and not data.get("national_id") and not data.get("card_no"):
+    # لو الرقم القومي لسه مش موجود (صورة بطاقة مشوشة)، جرب OCR.space حتى لو الكارت اتقرا - كان شرطه القديم بيمنعه
+    if not data.get("national_id") or (not data.get("name") and not data.get("card_no")):
         try:
             import urllib.request, urllib.parse, json as _json, base64 as _b64
             debug.append("Trying OCR.space (no install) as last fallback...")
@@ -1450,33 +1461,46 @@ with tab1:
         prov = crow.get("Provider", "")
         if pnum or prov:
             st.info(f"📌 Policy: {crow.get('Policy Name','')} | Number: {pnum} | Provider: {prov}")
+    # --- Manual NID fallback: لو السكان فشل (صورة مشوشة زي اللي في السكرين)، اكتب الرقم القومي هنا بره الفورم ---
+    # ده بره الفورم عشان Streamlit يحدّث تاريخ الميلاد والنوع فورا أول ما تكتب الرقم
+    _manual_nid_input = st.text_input(T("manual_nid_label"), value=st.session_state.get("scan_nid",""), key="manual_nid_box", max_chars=14, help=T("manual_nid_help"))
+    _manual_dob = None
+    _manual_gender = ""
+    _manual_src = (_manual_nid_input or "").strip()
+    if len(_manual_src)==14 and _manual_src.isdigit():
+        try:
+            _cent_m = int(_manual_src[0]); _yy_m = int(_manual_src[1:3]); _mm_m = int(_manual_src[3:5]); _dd_m = int(_manual_src[5:7])
+            _yyyy_m = (1900 if _cent_m==2 else 2000 if _cent_m==3 else 1900) + _yy_m
+            _manual_dob = date(_yyyy_m, _mm_m, _dd_m)
+            _manual_gender = "Female" if int(_manual_src[12])%2==0 else "Male"
+            # خلي الـ Scan يستخدم الرقم اليدوي ده
+            st.session_state["scan_nid"] = _manual_src
+            if _manual_dob:
+                _def_dob = _manual_dob
+            if _manual_gender:
+                _def_gender = _manual_gender
+            st.info(f"{T('scan_from_nid')} {_manual_dob.strftime('%Y-%m-%d')} | {T('scan_gender_label')} {_manual_gender}")
+        except Exception:
+            pass
     with st.form("add_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         staff_id = c1.text_input(T("staff_id"))
         first_name = c1.text_input(T("first_name"), value=_def_first)
         family_name = c2.text_input(T("family_name"), value=_def_family)
         dependency = c2.selectbox(T("dependency"), ["Employee", "Spouse", "Child", "Parent"] if LANG=="en" else ["Employee", "Spouse", "Child", "Parent"])
-        gender = c1.selectbox("* Gender", ["Male", "Female"], index=0 if (_manual_gender or _def_gender)=="Male" else 1)
+        gender = c1.selectbox(T("gender"), ["Male", "Female"], index=0 if (_manual_gender or _def_gender)=="Male" else 1)
         dob = c1.date_input(T("dob"), value=_def_dob)
-        plan = c2.selectbox("* Plan - من الكارت", ["Plan A", "Plan B", "Plan C", "Plan D"], index=["Plan A","Plan B","Plan C","Plan D"].index(_def_plan) if _def_plan in ["Plan A","Plan B","Plan C","Plan D"] else 0)
+        plan = c2.selectbox(T("plan_from_card"), ["Plan A", "Plan B", "Plan C", "Plan D"], index=["Plan A","Plan B","Plan C","Plan D"].index(_def_plan) if _def_plan in ["Plan A","Plan B","Plan C","Plan D"] else 0)
         provider_add = c1.selectbox(T("provider"), _prov_options, index=_prov_options.index(_def_provider) if _def_provider in _prov_options else 0)
         policy_num_add = c1.text_input(T("policy_num"))
         mobile = c2.text_input(T("mobile"))
         email = c1.text_input(T("email"))
         iban = c2.text_input(T("iban"))
         national_id = c1.text_input(T("national_id"), value=st.session_state.get("scan_nid",""))
-        # لو كتبت الرقم القومي يدوي (لما الصورة مش واضحة)، طلع منه تاريخ الميلاد والنوع لوحده
-        _manual_dob = None
-        _manual_gender = None
+        # الرقم القومي اليدوي بيتقرا من البوكس اللي فوق الفورم (بره الفورم) - جوة الفورم مينفعش يحدّث DOB في نفس الرندر
         if national_id and len(national_id.strip())==14 and national_id.strip().isdigit():
             try:
-                _nid_m = national_id.strip()
-                _cent_m = int(_nid_m[0]); _yy_m = int(_nid_m[1:3]); _mm_m = int(_nid_m[3:5]); _dd_m = int(_nid_m[5:7])
-                _yyyy_m = (1900 if _cent_m==2 else 2000 if _cent_m==3 else 1900) + _yy_m
-                from datetime import date as _d_m
-                _manual_dob = _d_m(_yyyy_m, _mm_m, _dd_m)
-                _manual_gender = "Female" if int(_nid_m[12])%2==0 else "Male"
-                st.info(f"{T('scan_from_nid')} {_manual_dob.strftime('%Y-%m-%d')} | {T('scan_gender_label')} {_manual_gender}")
+                pass
             except:
                 pass
         expiry_date = c2.date_input(T("expiry"))
