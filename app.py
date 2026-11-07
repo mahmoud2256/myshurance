@@ -519,14 +519,25 @@ def extract_from_id_image(image_file, manual_angle=0):
             # البطاقة ممكن تبقى مقلوبة 90 درجة وبالعربي - جرب 4 لفات + عربي+انجليزي وخد أحسن نتيجة فيها 14 رقم
             _best_txt = ""
             _best_score = -1
-            _jpeg_base, _img_base = prepare_image(image_file)
+            # استخدم الصورة الأصلية من غير قص - القص كان بيقطع بطاقة الرقم القومي
+            import io as _io_raw
+            try:
+                _raw_bytes = image_file.getvalue() if hasattr(image_file, "getvalue") else image_file.read()
+                try:
+                    image_file.seek(0)
+                except:
+                    pass
+                from PIL import Image as _PIL2
+                _img_base = _PIL2.open(_io_raw.BytesIO(_raw_bytes)).convert("RGB")
+            except:
+                _jpeg_base, _img_base = prepare_image(image_file)
             for _ang in [0, 90, 180, 270]:
                 try:
                     _rot = _img_base.rotate(_ang, expand=True) if _ang != 0 else _img_base
                     _b = _io.BytesIO()
                     _rot.save(_b, "JPEG", quality=85)
                     _b64_try = _b64.b64encode(_b.getvalue()).decode()
-                    _pay = urllib.parse.urlencode({"apikey": "helloworld", "base64Image": f"data:image/jpeg;base64,{_b64_try}", "language": "ara+eng", "isOverlayRequired": False, "OCREngine": "2", "scale": "true"}).encode()
+                    _pay = urllib.parse.urlencode({"apikey": "helloworld", "base64Image": f"data:image/jpeg;base64,{_b64_try}", "language": "ara+eng", "isOverlayRequired": False, "OCREngine": "1", "scale": "true"}).encode()
                     _rq = urllib.request.Request("https://api.ocr.space/parse/image", data=_pay, headers={"Content-Type": "application/x-www-form-urlencoded"})
                     with urllib.request.urlopen(_rq, timeout=30) as _rp:
                         _rj = _json.loads(_rp.read().decode())
@@ -1046,7 +1057,7 @@ with tab1:
                     if res.get("card_no"):
                         st.info(f"🪪 رقم الكارت: {res['card_no']} - والرقم القومي (14 رقم) كمله يدوي من البطاقة الشخصية")
             else:
-                st.warning("مقدرتش أقرا البيانات - جرب تصور البطاقة معدولة (بالعرض)، ومن غير فلاش، وخلي الكلام واضح، ودوس Scan تاني")
+                st.warning("مقدرتش أقرا البيانات من الصورة دي - الصورة صغيرة ومشوشة والكلام مش باين حتى بالعين. جرب تصورها تاني معدولة وبالعرض ومن غير فلاش وقرّب الكاميرا، أو اكتب الرقم القومي (14 رقم) يدوي تحت وهيطلعلك تاريخ الميلاد والنوع لوحدهم.")
     if "scan_name" not in st.session_state:
         st.session_state["scan_name"] = ""
         st.session_state["scan_dob"] = ""
@@ -1106,15 +1117,29 @@ with tab1:
         first_name = c1.text_input("* First Name - من الـ Scan", value=_def_first)
         family_name = c2.text_input("* Family Name - باقي الاسم", value=_def_family)
         dependency = c2.selectbox("* Dependency", ["Employee", "Spouse", "Child", "Parent"])
-        gender = c1.selectbox("* Gender", ["Male", "Female"], index=0 if _def_gender=="Male" else 1)
-        dob = c1.date_input("* Date of Birth - من الـ Scan", value=_def_dob)
+        gender = c1.selectbox("* Gender", ["Male", "Female"], index=0 if (_manual_gender or _def_gender)=="Male" else 1)
+        dob = c1.date_input("* Date of Birth - من الـ Scan أو من الرقم القومي", value=_manual_dob if _manual_dob is not None else _def_dob)
         plan = c2.selectbox("* Plan - من الكارت", ["Plan A", "Plan B", "Plan C", "Plan D"], index=["Plan A","Plan B","Plan C","Plan D"].index(_def_plan) if _def_plan in ["Plan A","Plan B","Plan C","Plan D"] else 0)
         provider_add = c1.selectbox("Insurance Provider / شركة التأمين - من الكارت", _prov_options, index=_prov_options.index(_def_provider) if _def_provider in _prov_options else 0)
         policy_num_add = c1.text_input("Policy Number / رقم الوثيقة")
         mobile = c2.text_input("* Mobile Number")
         email = c1.text_input("Email ID")
         iban = c2.text_input("* IBAN / Account Number")
-        national_id = c1.text_input("* National ID - من الـ Scan", value=st.session_state.get("scan_nid",""))
+        national_id = c1.text_input("* National ID - من الـ Scan أو اكتبه يدوي (14 رقم)", value=st.session_state.get("scan_nid",""))
+        # لو كتبت الرقم القومي يدوي (لما الصورة مش واضحة)، طلع منه تاريخ الميلاد والنوع لوحده
+        _manual_dob = None
+        _manual_gender = None
+        if national_id and len(national_id.strip())==14 and national_id.strip().isdigit():
+            try:
+                _nid_m = national_id.strip()
+                _cent_m = int(_nid_m[0]); _yy_m = int(_nid_m[1:3]); _mm_m = int(_nid_m[3:5]); _dd_m = int(_nid_m[5:7])
+                _yyyy_m = (1900 if _cent_m==2 else 2000 if _cent_m==3 else 1900) + _yy_m
+                from datetime import date as _d_m
+                _manual_dob = _d_m(_yyyy_m, _mm_m, _dd_m)
+                _manual_gender = "Female" if int(_nid_m[12])%2==0 else "Male"
+                st.info(f"✅ من الرقم القومي: تاريخ الميلاد {_manual_dob.strftime('%Y-%m-%d')} | النوع {_manual_gender}")
+            except:
+                pass
         expiry_date = c2.date_input("Card Expiry Date")
         submitted = st.form_submit_button("Save Addition ✅", use_container_width=True)
         if submitted:
