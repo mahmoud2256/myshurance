@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
+from datetime import datetime, date
 import io
 import urllib.parse
 
@@ -112,7 +112,7 @@ TRANSLATIONS = {
         "scan_fail": "مقدرتش أقرا البيانات - الصورة مش واضحة. جرب تصورها تاني معدولة وبالعرض ومن غير فلاش، أو اكتب الرقم القومي (14 رقم) يدوي تحت وهيطلعلك تاريخ الميلاد والنوع لوحدهم.",
         "scan_from_nid": "✅ من الرقم القومي: تاريخ الميلاد",
         "scan_gender_label": "النوع",
-        "select_company": "اختار المدرسة",
+        "select_company": "اختار الشركة",
         "staff_id": "رقم الموظف",
         "first_name": "الاسم الأول - من السكان",
         "family_name": "باقي الاسم",
@@ -230,7 +230,7 @@ TRANSLATIONS = {
         "scan_fail": "Could not read data - Photo is unclear. Retake photo straight, landscape, no flash, or type National ID (14 digits) manually below and DOB and Gender will be filled automatically.",
         "scan_from_nid": "✅ From National ID: Date of Birth",
         "scan_gender_label": "Gender",
-        "select_company": "Select School / Company",
+        "select_company": "Select Company",
         "staff_id": "Staff ID",
         "first_name": "First Name - From Scan",
         "family_name": "Family Name",
@@ -1396,7 +1396,7 @@ with tab1:
                 from datetime import date as _d_m
                 _manual_dob = _d_m(_yyyy_m, _mm_m, _dd_m)
                 _manual_gender = "Female" if int(_nid_m[12])%2==0 else "Male"
-                st.info(f"✅ من الرقم القومي: تاريخ الميلاد {_manual_dob.strftime('%Y-%m-%d')} | النوع {_manual_gender}")
+                st.info(f"{T('scan_from_nid')} {_manual_dob.strftime('%Y-%m-%d')} | {T('scan_gender_label')} {_manual_gender}")
             except:
                 pass
         expiry_date = c2.date_input(T("expiry"))
