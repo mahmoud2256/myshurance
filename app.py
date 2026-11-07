@@ -666,6 +666,26 @@ with tab1:
     scan_file = st.file_uploader("📸 Scan البطاقة الشخصية أو الكارنيه - ارفع الصورة هنا", type=["jpg","jpeg","png"], key="scan_id")
     if scan_file is not None:
         st.image(scan_file, caption="الصورة اللي اترفعت - راجعها", width=350)
+        # تشخيص المحركات - بيبان على طول عشان نعرف المشكلة فين
+        try:
+            import pytesseract
+            _tes = pytesseract.get_tesseract_version()
+            st.info(f"✅ tesseract شغال: {_tes}")
+        except Exception as e:
+            st.error(f"❌ tesseract مش موجود: {e} - المشكلة في packages.txt، مش في الصورة")
+        try:
+            import cv2
+            st.info(f"✅ opencv شغال: {cv2.__version__}")
+        except Exception as e:
+            st.warning(f"⚠ opencv مش موجود: {e} - قص الكارنيه مش هيشتغل")
+        try:
+            _key = st.secrets.get("ANTHROPIC_API_KEY", "")
+            if _key:
+                st.info("✅ Claude Key موجود - هيشتغل بـ Claude")
+            else:
+                st.info("ℹ مفيش Claude Key - هيشتغل بـ tesseract بالتصويت")
+        except:
+            st.info("ℹ مفيش Claude Key - هيشتغل بـ tesseract")
         manual_angle = st.selectbox("لو الصورة مايلة / مقلوبة، عدّلها من هنا الأول:", [0, 90, 180, 270], format_func=lambda x: {0: "معدولة ✅", 90: "لف 90 درجة", 180: "لف 180 درجة", 270: "لف 270 درجة"}[x], key="scan_rotate")
         st.caption("جرب 90 لو الكارنيه متصور بالعرض زي صورة FATEMA")
         if st.button("🔍 اعمل Scan واملا البيانات لوحدها", use_container_width=True):
@@ -677,13 +697,18 @@ with tab1:
                 st.session_state["scan_raw"] = res["raw_text"]
                 st.session_state["scan_debug"] = res.get("debug", [])
                 st.session_state["scan_done"] = True
-            with st.expander("🔍 شوف اللي اتقرا من الصورة - للتشخيص", expanded=False):
+            with st.expander("🔍 شوف اللي اتقرا من الصورة - للتشخيص", expanded=True):
                 st.write(f"طول النص اللي اتقرا: {len(res.get('raw_text',''))} حرف")
                 st.text(res.get("raw_text","")[:3000] or "(مفيش نص اتقرا خالص)")
                 st.divider()
                 st.write("التشخيص:")
                 for d in res.get("debug", []):
                     st.text(d)
+            # اظهر التشخيص على طول من غير ما تدوس
+            st.write("**التشخيص:**")
+            for d in res.get("debug", [])[:10]:
+                st.text(d)
+            st.write(f"طول النص اللي اتقرا: {len(res.get('raw_text',''))} حرف")
             if res["national_id"] or res["name"]:
                 st.success(f"تم القراءة ✅ - الاسم: {res['name']} | الرقم: {res['national_id']} | الميلاد: {res['dob']} | المدرسة: {res.get('policy_holder','')}")
                 st.info("راجع البيانات تحت، لو فيه حاجة غلط عدّلها قبل ما تدوس Save - انت المراجع بس")
