@@ -31,8 +31,18 @@ inject_css()
 if "lang" not in st.session_state:
     st.session_state["lang"] = "ar"
 # زرار اللغة فوق خالص - قبل أي حاجة
-_lang_choice = st.sidebar.radio("🌐 Language / اللغة", ["العربية", "English"], index=0 if st.session_state["lang"]=="ar" else 1, key="lang_radio")
-st.session_state["lang"] = "ar" if _lang_choice=="العربية" else "en"
+# زرار اللغة - نفسه لازم يبقى بلغة واحدة بس، من غير خلط
+# لو اللغة عربي: الليبل والاختيارات عربي بس. لو انجليزي: الليبل والاختيارات انجليزي بس.
+if st.session_state["lang"] == "ar":
+    _lang_label = "🌐 اللغة"
+    _lang_opts = ["العربية", "الإنجليزية"]
+    _lang_choice = st.sidebar.radio(_lang_label, _lang_opts, index=0 if st.session_state["lang"]=="ar" else 1, key="lang_radio")
+    st.session_state["lang"] = "ar" if _lang_choice=="العربية" else "en"
+else:
+    _lang_label = "🌐 Language"
+    _lang_opts = ["Arabic", "English"]
+    _lang_choice = st.sidebar.radio(_lang_label, _lang_opts, index=1, key="lang_radio")
+    st.session_state["lang"] = "en" if _lang_choice=="English" else "ar"
 LANG = st.session_state["lang"]
 
 TRANSLATIONS = {
@@ -137,6 +147,22 @@ TRANSLATIONS = {
         "name_col": "الاسم",
         "plan_col": "الخطة",
         "dep_col": "صلة القرابة",
+        "add_company": "إضافة شركة جديدة",
+        "add_4_clients": "➕ أضف العملاء الأربعة الجاهزين",
+        "added_n": "تم إضافة",
+        "company_word": "شركة",
+        "clients_exist": "العملاء الأربعة موجودين خلاص ✅",
+        "company_name": "اسم الشركة *",
+        "policy_name": "اسم الوثيقة",
+        "hr_name": "اسم مسؤول الـ HR",
+        "hr_phone": "تليفون الـ HR / واتساب",
+        "members_count": "عدد الأعضاء",
+        "save_company": "حفظ الشركة 🏢",
+        "company_required": "اسم الشركة مطلوب",
+        "added_ok": "اتضافت ✅",
+        "all_companies": "كل الشركات",
+        "no_companies": "مفيش شركات لسه - دوس على زرار إضافة العملاء الأربعة فوق",
+        "approve_reject": "قبول / رفض",
     },
     "en": {
         "login_title": "🔐 Myshurance - Login",
@@ -239,6 +265,22 @@ TRANSLATIONS = {
         "name_col": "Name",
         "plan_col": "Plan",
         "dep_col": "Dependency",
+        "add_company": "Add New Company",
+        "add_4_clients": "➕ Add the 4 Ready Clients",
+        "added_n": "Added",
+        "company_word": "companies",
+        "clients_exist": "The 4 clients already exist ✅",
+        "company_name": "Company Name *",
+        "policy_name": "Policy Name",
+        "hr_name": "HR Contact Name",
+        "hr_phone": "HR Phone / WhatsApp",
+        "members_count": "Members Count",
+        "save_company": "Save Company 🏢",
+        "company_required": "Company Name is required",
+        "added_ok": "added ✅",
+        "all_companies": "All Companies",
+        "no_companies": "No companies yet - Click Add the 4 Ready Clients above",
+        "approve_reject": "Approve / Reject",
     }
 }
 def T(k):
@@ -1122,7 +1164,7 @@ if not df_appr.empty and "Status" in df_appr.columns and "Date" in df_appr.colum
         df_appr["_d"] = pd.to_datetime(df_appr["Date"], errors="coerce")
         old_pending = df_appr[(df_appr["Status"]=="Pending") & (df_appr["_d"] < pd.Timestamp.now() - pd.Timedelta(days=2))]
         if not old_pending.empty:
-            st.warning(f"⚠ فيه {len(old_pending)} موافقة Pending بقالها أكتر من يومين - لازم تتراجع!")
+            st.warning(f"{T('alerts_old')} ({len(old_pending)})")
             st.dataframe(old_pending.drop(columns=["_d"]), use_container_width=True)
             alert_found = True
     except:
@@ -1133,7 +1175,7 @@ if not df_add.empty and any("Expir" in c or "expir" in c for c in df_add.columns
         df_add["_exp"] = pd.to_datetime(df_add[exp_col], errors="coerce")
         soon = df_add[(df_add["_exp"] >= pd.Timestamp.now()) & (df_add["_exp"] <= pd.Timestamp.now() + pd.Timedelta(days=30))]
         if not soon.empty:
-            st.error(f"🚨 فيه {len(soon)} كارت هيخلص خلال 30 يوم!")
+            st.error(f"{T('alerts_exp')} ({len(soon)})")
             st.dataframe(soon.drop(columns=["_exp"]), use_container_width=True)
             alert_found = True
     except:
@@ -1150,16 +1192,16 @@ col5.metric(T("pending_m"), pending)
 col6.metric(T("total_m"), len(df_add) + len(df_del) + len(df_upg))
 st.divider()
 if "last_wa_msg" in st.session_state:
-    st.success("آخر طلب اتسجل ✅ - ابعته واتساب من هنا:")
-    show_wa_button(st.session_state["last_wa_msg"], "Send Last Request on WhatsApp")
-    if st.button("Clear WhatsApp Message ❌"):
+    st.success(T("last_wa"))
+    show_wa_button(st.session_state["last_wa_msg"], T("send_wa"))
+    if st.button(T("clear_wa")):
         del st.session_state["last_wa_msg"]
         st.rerun()
     st.divider()
 
 st.subheader(T("export_title"))
 export_type = st.selectbox(T("export_choose"), ["All - Addition + Deletion + Upgrade", "Addition Only", "Deletion Only", "Upgrade Only", "Approvals Only", "Companies Only"])
-if st.button("Download Excel Report 📥", use_container_width=True):
+if st.button(T("export_btn"), use_container_width=True):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         if export_type == "All - Addition + Deletion + Upgrade":
@@ -1177,7 +1219,7 @@ if st.button("Download Excel Report 📥", use_container_width=True):
         else:
             df_upg.to_excel(writer, sheet_name="Upgrade", index=False)
     output.seek(0)
-    st.download_button(label="Click here to save the file 💾", data=output, file_name=f"Myshurance_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+    st.download_button(label=T("export_save"), data=output, file_name=f"Myshurance_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 st.divider()
 st.subheader(T("search_title"))
 search = st.text_input(T("search_title"), placeholder=T("search_ph"))
@@ -1191,23 +1233,23 @@ if search:
     if not df_upg.empty:
         tmp = df_upg.copy(); tmp["Type"] = "Upgrade"; all_df = pd.concat([all_df, tmp], ignore_index=True)
     if all_df.empty:
-        st.info("No data yet")
+        st.info(T("search_no_data"))
     else:
         mask = all_df.astype(str).apply(lambda row: row.str.lower().str.contains(search_lower, na=False).any(), axis=1)
         result = all_df[mask]
         if result.empty:
-            st.warning(f"No results for: {search}")
+            st.warning(f"{T('search_no')} {search}")
         else:
-            st.success(f"Found {len(result)} result(s)")
+            st.success(f"{T('search_found')}: {len(result)}")
             st.dataframe(result, use_container_width=True)
     st.divider()
 
 tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs([T("tab_comp"), T("tab_add"), T("tab_del"), T("tab_upg"), T("tab_appr"), T("tab_analytics")])
 
 with tab0:
-    st.subheader("Add New Company")
+    st.subheader(T("add_company"))
     # زرار إضافة العملاء الأربعة مرة واحدة
-    if st.button("➕ أضف العملاء الأربعة الجاهزين (نيو سكول / بوب ليدرز / ليدرز انترناشونال / ليدرز كوليدج)", use_container_width=True):
+    if st.button(T("add_4_clients"), use_container_width=True):
         existing_names = df_comp["Company Name"].astype(str).tolist() if not df_comp.empty and "Company Name" in df_comp.columns else []
         added = 0
         for c in DEFAULT_CLIENTS:
@@ -1215,33 +1257,33 @@ with tab0:
                 save_to_sheet_gs("companies", c)
                 added += 1
         if added > 0:
-            st.success(f"تم إضافة {added} شركة ✅")
+            st.success(f"{T('added_n')} {added} {T('company_word')} ✅")
             st.rerun()
         else:
-            st.info("العملاء الأربعة موجودين خلاص ✅")
+            st.info(T("clients_exist"))
     with st.form("comp_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        comp_name = c1.text_input("Company Name *")
-        comp_policy_name = c1.text_input("Policy Name / اسم الوثيقة")
-        comp_policy_num = c1.text_input("Policy Number / رقم الوثيقة")
-        comp_provider = c2.selectbox("Insurance Provider / شركة التأمين", PROVIDERS)
-        comp_hr = c1.text_input("HR Contact Name")
-        comp_phone = c2.text_input("HR Phone / WhatsApp")
-        comp_plan = c2.selectbox("Plan", ["Plan A", "Plan B", "Plan C"])
-        comp_members = c1.number_input("Members Count", min_value=0, step=1)
-        comp_sub = st.form_submit_button("Save Company 🏢", use_container_width=True)
+        comp_name = c1.text_input(T("company_name"))
+        comp_policy_name = c1.text_input(T("policy_name"))
+        comp_policy_num = c1.text_input(T("policy_num"))
+        comp_provider = c2.selectbox(T("provider"), PROVIDERS)
+        comp_hr = c1.text_input(T("hr_name"))
+        comp_phone = c2.text_input(T("hr_phone"))
+        comp_plan = c2.selectbox(T("plan"), ["Plan A", "Plan B", "Plan C"])
+        comp_members = c1.number_input(T("members_count"), min_value=0, step=1)
+        comp_sub = st.form_submit_button(T("save_company"), use_container_width=True)
         if comp_sub:
             if not comp_name:
-                st.error("Company Name مطلوب")
+                st.error(T("company_required"))
             else:
                 new_comp = {"Company Name": comp_name, "Policy Name": comp_policy_name or comp_name, "Policy Number": comp_policy_num, "Provider": comp_provider, "HR Contact": comp_hr, "HR Phone": comp_phone, "Plan": comp_plan, "Members Count": comp_members, "Created Date": datetime.now().strftime("%Y-%m-%d")}
                 save_to_sheet_gs("companies", new_comp)
-                st.success(f"Company {comp_name} added ✅")
+                st.success(f"{T('company_word')} {comp_name} {T('added_ok')}")
                 st.rerun()
     st.divider()
-    st.subheader("All Companies - العملاء")
+    st.subheader(T("all_companies"))
     if df_comp.empty:
-        st.info("No companies yet - دوس على زرار إضافة العملاء الأربعة فوق")
+        st.info(T("no_companies"))
     else:
         st.dataframe(df_comp, use_container_width=True)
 
@@ -1270,11 +1312,11 @@ with tab1:
                     if not res["name"]:
                         st.info("✍️ الاسم بالعربي اتقرا مكسر من الصورة - اكتبه انت يدوي بالعربي أو بالإنجليزي في الفورم تحت، باقي البيانات اتملت لوحدها من الرقم القومي.")
                 else:
-                    st.success(f"تم القراءة ✅ - {res['name']} | رقم الكارت: {res.get('card_no','')}")
+                    st.success(f"{T('scan_ok')} - {res['name']} | {T('scan_card_no')}: {res.get('card_no','')}")
                     if res.get("card_no"):
-                        st.info(f"🪪 رقم الكارت: {res['card_no']} - والرقم القومي (14 رقم) كمله يدوي من البطاقة الشخصية")
+                        st.info(f"🪪 {T('scan_card_no')}: {res['card_no']} - {T('scan_nid_manual')}")
             else:
-                st.warning("مقدرتش أقرا البيانات من الصورة دي - الصورة صغيرة ومشوشة والكلام مش باين حتى بالعين. جرب تصورها تاني معدولة وبالعرض ومن غير فلاش وقرّب الكاميرا، أو اكتب الرقم القومي (14 رقم) يدوي تحت وهيطلعلك تاريخ الميلاد والنوع لوحدهم.")
+                st.warning(T("scan_fail"))
     if "scan_name" not in st.session_state:
         st.session_state["scan_name"] = ""
         st.session_state["scan_dob"] = ""
@@ -1337,11 +1379,11 @@ with tab1:
         gender = c1.selectbox("* Gender", ["Male", "Female"], index=0 if (_manual_gender or _def_gender)=="Male" else 1)
         dob = c1.date_input(T("dob"), value=_def_dob)
         plan = c2.selectbox("* Plan - من الكارت", ["Plan A", "Plan B", "Plan C", "Plan D"], index=["Plan A","Plan B","Plan C","Plan D"].index(_def_plan) if _def_plan in ["Plan A","Plan B","Plan C","Plan D"] else 0)
-        provider_add = c1.selectbox("Insurance Provider / شركة التأمين - من الكارت", _prov_options, index=_prov_options.index(_def_provider) if _def_provider in _prov_options else 0)
-        policy_num_add = c1.text_input("Policy Number / رقم الوثيقة")
-        mobile = c2.text_input("* Mobile Number")
-        email = c1.text_input("Email ID")
-        iban = c2.text_input("* IBAN / Account Number")
+        provider_add = c1.selectbox(T("provider"), _prov_options, index=_prov_options.index(_def_provider) if _def_provider in _prov_options else 0)
+        policy_num_add = c1.text_input(T("policy_num"))
+        mobile = c2.text_input(T("mobile"))
+        email = c1.text_input(T("email"))
+        iban = c2.text_input(T("iban"))
         national_id = c1.text_input(T("national_id"), value=st.session_state.get("scan_nid",""))
         # لو كتبت الرقم القومي يدوي (لما الصورة مش واضحة)، طلع منه تاريخ الميلاد والنوع لوحده
         _manual_dob = None
@@ -1492,7 +1534,7 @@ with tab4:
         show_df = df_appr if status_filter == "All" else df_appr[df_appr["Status"] == status_filter]
         st.dataframe(show_df, use_container_width=True)
         st.divider()
-        st.subheader("Approve / Reject")
+        st.subheader(T("approve_reject"))
         if not show_df.empty:
             selected_id = st.selectbox("Select Approval ID", show_df["ID"].tolist())
             col_a, col_b = st.columns(2)
