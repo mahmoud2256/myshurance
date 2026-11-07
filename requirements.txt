@@ -6,3 +6,4 @@ google-auth
 reportlab
 pillow
 pytesseract
+pyzbar
