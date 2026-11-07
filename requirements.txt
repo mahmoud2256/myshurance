@@ -6,4 +6,5 @@ google-auth
 reportlab
 pillow
 pytesseract
-pyzbar
+rapidocr-onnxruntime
+numpy
