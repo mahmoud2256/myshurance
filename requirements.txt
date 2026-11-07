@@ -6,3 +6,7 @@ google-auth
 reportlab
 pillow
 pytesseract
+rapidocr-onnxruntime
+numpy
+anthropic
+opencv-python-headless
