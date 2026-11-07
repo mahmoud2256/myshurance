@@ -1,6 +1,3 @@
-# Myshurance - Based on YOUR old code (622 lines) + edits on top of it
-# Old code preserved, only added: PROVIDERS + CLIENTS + Scan + Deletion new flow + Delete Company
-# Total lines now: see bottom - old 622 + new features
 import streamlit as st
 import pandas as pd
 import os
@@ -10,7 +7,7 @@ import urllib.parse
 
 st.set_page_config(page_title="Myshurance - Hub", layout="wide")
 
-# --- NEW: Colors from v4_2 - Teal + Sand + Cairo ---
+# --- Colors from v4_2 - Teal + Sand + Cairo ---
 TEAL_DARK, TEAL, TEAL_ACTIVE = "#07363B", "#0B4F55", "#226068"
 SAND, CREAM, BORDER = "#E8C9A0", "#F6F1E8", "#E8DCC8"
 def inject_css():
@@ -30,6 +27,7 @@ h1, h2, h3 {{ color: {TEAL_DARK}; }}
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 inject_css()
 
+
 # --- NEW: Insurance Providers & Clients ---
 PROVIDERS = ["Sarwa Life", "Sarwa", "Orient", "AXA", "Gig Life"]
 
@@ -41,338 +39,519 @@ DEFAULT_CLIENTS = [
     {"Company Name": "ليدرز كوليدج للخدمات التعليمية", "Policy Name": "ليدرز كوليدج للخدمات التعليمية", "Policy Number": "90502239932", "HR Contact": "", "HR Phone": "", "Plan": "Plan A", "Members Count": 0, "Created Date": datetime.now().strftime("%Y-%m-%d")},
 ]
 
+# ===== OCR from v4_2 ocr.py - شغال معاك =====
 
-# --- OCR: Scan National ID / Card - يملي لوحده ---
+# --- Helpers to replace store.py (S.*) - same logic as v4_2 store.py ---
+def _S_secret(key):
+    try:
+        return st.secrets.get(key, None)
+    except:
+        return None
+def _S_to_iso(v):
+    import re as _re
+    from datetime import datetime as _dt
+    if not v:
+        return None
+    v = str(v).strip()
+    for fmt in ("%d-%b-%y", "%d-%b-%Y", "%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d-%m-%y", "%Y/%m/%d"):
+        try:
+            return _dt.strptime(v, fmt).strftime("%Y-%m-%d")
+        except:
+            continue
+    m = _re.search(r"(\d{1,2})\s?[-–]?\s?([A-Za-z]{3})\s?[-–]?\s?(\d{4}|\d{2})", v)
+    if m:
+        months = {mm:i for i,mm in enumerate(["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"],1)}
+        mo = months.get(m.group(2).lower())
+        if mo:
+            y = int(m.group(3))
+            y = y if y>99 else (1900+y if y>30 else 2000+y)
+            return f"{y:04d}-{mo:02d}-{int(m.group(1)):02d}"
+    # already ISO?
+    if _re.match(r"\d{4}-\d{2}-\d{2}", v):
+        return v[:10]
+    return None
+def _S_parse_nid(nid):
+    import re as _re
+    from datetime import date as _date
+    if not nid:
+        return None
+    nid = _re.sub(r"\D", "", str(nid))
+    if len(nid)!=14 or not nid.isdigit():
+        return None
+    try:
+        yy=int(nid[1:3]); mm=int(nid[3:5]); dd=int(nid[5:7])
+        century = 2000 if nid[0]=="3" else 1900 if nid[0]=="2" else None
+        if century is None:
+            return None
+        dob=_date(century+yy, mm, dd)
+        gender="Female" if int(nid[12])%2==0 else "Male"
+        return {"dob": dob.strftime("%Y-%m-%d"), "gender": gender}
+    except:
+        return None
+def _S_nn(v):
+    return v if v is not None else ""
+def _S_norm_category(v):
+    if not v:
+        return None
+    v=str(v).strip().upper()
+    return v if v in ["A","B","C","D"] else None
+AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+# أسماء الحقول عند النموذج -> مفتاح الترجمة في الواجهة
+UI_KEY = {"name": "c_name", "national_id": "f_nid", "card_no": "c_card", "category": "c_cat",
+          "dob": "c_dob", "expiry_date": "c_end"}
+
+TOOLS = {
+    "nid": {
+        "name": "record_national_id",
+        "description": "سجّل البيانات المقروءة من صورة بطاقة الرقم القومي المصرية.",
+        "input_schema": {"type": "object", "properties": {
+            "is_national_id": {"type": "boolean", "description": "هل الصورة بطاقة رقم قومي مصرية؟"},
+            "name": {"type": ["string", "null"], "description": "الاسم الكامل بالعربي زي ما هو مطبوع (الاسم الأول + اسم الأب + الجد + العائلة). من غير سطور العنوان."},
+            "national_id": {"type": ["string", "null"], "description": "الرقم القومي 14 رقم، بأرقام إنجليزية 0-9."},
+            "uncertain_fields": {"type": "array", "items": {"type": "string", "enum": ["name", "national_id"]},
+                                 "description": "الحقول اللي مش متأكد منها 100% (صورة مش واضحة أو حرف/رقم مشكوك فيه)."},
+        }, "required": ["is_national_id", "name", "national_id", "uncertain_fields"]},
+    },
+    "card": {
+        "name": "record_insurance_card",
+        "description": "سجّل البيانات المقروءة من صورة كارنيه تأمين صحي.",
+        "input_schema": {"type": "object", "properties": {
+            "name": {"type": ["string", "null"], "description": "اسم المؤمن عليه زي ما هو مطبوع."},
+            "card_no": {"type": ["string", "null"], "description": "رقم الكارت بالظبط زي ما هو مطبوع (حروف وأرقام)."},
+            "category": {"type": ["string", "null"], "description": "الفئة (A أو B أو C أو D) لو مكتوبة."},
+            "dob": {"type": ["string", "null"], "description": "تاريخ الميلاد لو مكتوب."},
+            "expiry_date": {"type": ["string", "null"], "description": "تاريخ انتهاء الكارت لو مكتوب."},
+            "uncertain_fields": {"type": "array", "items": {"type": "string",
+                                 "enum": ["name", "card_no", "category", "dob", "expiry_date"]},
+                                 "description": "الحقول اللي مش متأكد منها 100%."},
+        }, "required": ["name", "card_no", "uncertain_fields"]},
+    },
+}
+PROMPTS = {
+    "nid": "ده تصوير لبطاقة رقم قومي مصرية. استخرج الاسم الكامل بالعربي والرقم القومي (14 رقم). "
+           "حوّل الأرقام الهندية (٠-٩) لأرقام إنجليزية. متخمّنش: لو حاجة مش واضحة سيبها null وحطها في uncertain_fields.",
+    "card": "ده تصوير لكارنيه تأمين صحي. استخرج اسم المؤمن عليه ورقم الكارت والفئة وتاريخ الميلاد وتاريخ الانتهاء لو موجودين. "
+            "انسخ رقم الكارت حرف بحرف زي المطبوع، ومتخمّنش: لو حاجة مش واضحة سيبها null وحطها في uncertain_fields.",
+}
+
+
+def to_western(v):
+    return v.translate(AR_DIGITS) if isinstance(v, str) else v
+
+
+def claude_available():
+    return bool(_S_secret("ANTHROPIC_API_KEY"))
+
+
+def tesseract_available():
+    try:
+        import pytesseract
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def prepare_image(file, max_side=1600):
+    """يعدّل اتجاه الصورة ويصغّرها (صور الموبايل كبيرة) ويرجّع (JPEG bytes، PIL image)."""
+    raw = file.getvalue() if hasattr(file, "getvalue") else file.read()
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
+    scale = max_side / max(img.size)
+    if scale < 1:
+        img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=88)
+    return buf.getvalue(), img
+
+
+# ───────────────────────── المحركات ─────────────────────────
+def _call_claude(jpeg_bytes, kind):
+    import anthropic
+    client = anthropic.Anthropic(api_key=_S_secret("ANTHROPIC_API_KEY"))
+    tool = TOOLS[kind]
+    resp = client.messages.create(
+        model=_S_secret("ANTHROPIC_MODEL") or "claude-sonnet-5-5", max_tokens=800,
+        tools=[tool], tool_choice={"type": "tool", "name": tool["name"]},
+        messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                         "data": base64.b64encode(jpeg_bytes).decode()}},
+            {"type": "text", "text": PROMPTS[kind]}]}])
+    for block in resp.content:
+        if block.type == "tool_use":
+            return dict(block.input)
+    raise ValueError("no tool output")
+
+
+def _tesseract_text(img, lang):
+    try:
+        import pytesseract
+        proc = ImageEnhance.Contrast(ImageOps.grayscale(img.resize((img.width * 2, img.height * 2)))).enhance(2.0)
+        return pytesseract.image_to_string(proc, lang=lang)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+_SKIP = re.compile(r"جمهورية|مصر|العربية|بطاقة|تحقيق|الشخصية|الرقم|القومي|الاسم|يسري|حتى")
+_KEYWORDS = ("card", "insured", "category", "expiry", "holder", "national")
+_BAD_NAME = re.compile(r"(?i)college|school|international|company|group|academy|universit|institute|hospital|"
+                       r"ltd|limited|holder|insured|national|category|co-?pay|dental|optical|maternity|expiry|"
+                       r"drugs|nextcare|allianz|single|family|card")
+_MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+
+
+def _gray(img, scale):
+    g = ImageOps.grayscale(img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS))
+    return ImageEnhance.Contrast(g).enhance(1.8)
+
+
+def _ocr(img, scale, psm, lang="eng"):
+    try:
+        import pytesseract
+        return pytesseract.image_to_string(_gray(img, scale), lang=lang, config=f"--psm {psm}")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _hits(text):
+    t = text.lower()
+    return sum(k in t for k in _KEYWORDS)
+
+
+def _order_pts(pts):
+    import numpy as np
+    s, d = pts.sum(1), np.diff(pts, axis=1).ravel()
+    return np.array([pts[np.argmin(s)], pts[np.argmin(d)], pts[np.argmax(s)], pts[np.argmax(d)]], dtype="float32")
+
+
+def _crop_card(img):
+    """يلاقي الكارت في الصورة (أزرق/رمادي فاتح على خلفية تانية) ويعدّله مستقيم. لو فشل يرجّع None."""
+    try:
+        import cv2
+        import numpy as np
+        bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        h, w = bgr.shape[:2]
+        b = cv2.cvtColor(cv2.GaussianBlur(bgr, (9, 9), 0), cv2.COLOR_BGR2LAB)[:, :, 2]
+        _, th = cv2.threshold(b, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, np.ones((31, 31), np.uint8))
+        th = cv2.morphologyEx(th, cv2.MORPH_OPEN, np.ones((15, 15), np.uint8))
+        cs, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not cs:
+            return None
+        c = max(cs, key=cv2.contourArea)
+        rect = cv2.minAreaRect(c)
+        cw, ch = rect[1]
+        if cv2.contourArea(c) < 0.15 * h * w or not (1.3 < max(cw, ch) / max(1, min(cw, ch)) < 2.0):
+            return None
+        box = _order_pts(cv2.boxPoints(rect))
+        wd = int(max(np.linalg.norm(box[0] - box[1]), np.linalg.norm(box[3] - box[2])))
+        ht = int(max(np.linalg.norm(box[0] - box[3]), np.linalg.norm(box[1] - box[2])))
+        m = cv2.getPerspectiveTransform(box, np.array([[0, 0], [wd, 0], [wd, ht], [0, ht]], dtype="float32"))
+        warp = cv2.warpPerspective(bgr, m, (wd, ht))
+        if warp.shape[0] > warp.shape[1]:
+            warp = cv2.rotate(warp, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        return Image.fromarray(cv2.cvtColor(warp, cv2.COLOR_BGR2RGB))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _upright(img):
+    """يجرّب الاتجاهات ويختار اللي فيه أكتر كلمات الكارنيه."""
+    base = _crop_card(img)
+    angles = (0, 180) if base is not None else (0, 90, 180, 270)
+    base = base if base is not None else img
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        scores = list(ex.map(lambda a: _hits(_ocr(base.rotate(a, expand=True), 1.2, 6)), angles))
+    best = max(zip(scores, [-a for a in angles], angles))
+    return base.rotate(best[2], expand=True)
+
+
+def _norm_hex(tok):
+    t = tok.upper().replace("O", "0").replace("Q", "0").replace("I", "1").replace("L", "1")
+    return t if re.fullmatch(r"[0-9A-F]{12,20}", t) else None
+
+
+def _clean_words(s):
+    s = re.sub(r"[^A-Za-z' \-]", " ", s or "")
+    words = [w for w in s.split() if len(w) >= 2]
+    return " ".join(words) if 2 <= len(words) <= 5 and not _BAD_NAME.search(s) else None
+
+
+def _name_cands(text):
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    out = []
+    for i, ln in enumerate(lines):
+        if not re.search(r"(?i)insured|name\s*:", ln):
+            continue
+        tail = _clean_words(ln.split(":")[-1]) if ":" in ln else None
+        if tail:
+            out.append(tail)
+            continue
+        for j in (i - 1, i + 1):  # القيمة أحياناً بتتقرا في السطر اللي قبل أو بعد اللابل
+            if 0 <= j < len(lines):
+                c = _clean_words(lines[j].split(":")[-1])
+                if c:
+                    out.append(c)
+    return out
+
+
+def _date_cands(text):
+    out = []
+    for d, mon, y in re.findall(r"(\d{1,2})\s?[-–]?\s?([A-Za-z]{3})\s?[-–]?\s?(\d{4}|\d{2})(?!\d)", text):
+        mo = _MONTHS.get(mon.lower())
+        if not mo:
+            continue
+        y = int(y)
+        y = y if y > 99 else (1900 + y if y > 30 else 2000 + y)
+        iso = _S_to_iso(f"{int(d):02d}-{mo:02d}-{y}")
+        if iso:
+            out.append(iso)
+    return out
+
+
+def _top(cands, min_votes=1):
+    from collections import Counter
+    if not cands:
+        return None, 0
+    val, n = Counter(cands).most_common(1)[0]
+    return (val, n) if n >= min_votes else (None, n)
+
+
+def _read_card_tesseract(img):
+    from concurrent.futures import ThreadPoolExecutor
+    card = _upright(img)
+    with ThreadPoolExecutor(max_workers=4) as ex:  # محاولات OCR بالتوازي (tesseract بيشتغل كعملية منفصلة)
+        texts = list(ex.map(lambda p: _ocr(card, p[0], p[1]), ((1, 4), (1, 11), (1.5, 11), (2, 11), (1, 6), (2, 4))))
+    def _votes(txts):
+        return ([h for t in txts for tok in re.findall(r"[0-9A-Za-z]{12,20}", t) if (h := _norm_hex(tok))],
+                [c for t in txts for c in _name_cands(t)])
+    hexes, names = _votes(texts)
+    if len({h for h in hexes if hexes.count(h) >= 2}) == 0 or not _top(names, 2)[0]:
+        # القراءة ناقصة: محاولات زيادة بدرجات تكبير مختلفة قبل ما نسيبه فاضي
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            more = list(ex.map(lambda p: _ocr(card, p[0], p[1]), ((3, 11), (0.8, 11), (1.2, 4), (2.5, 6), (1.5, 4), (3, 4))))
+        texts += more
+    raw, unsure = {}, []
+    hexes = [h for t in texts for tok in re.findall(r"[0-9A-Za-z]{12,20}", t) if (h := _norm_hex(tok))]
+    val, n = _top(hexes, 2)
+    if val:
+        raw["card_no"] = val
+        if n < 3:
+            unsure.append("card_no")
+    val, n = _top([c for t in texts for c in _name_cands(t)], 2)
+    if val:
+        raw["name"] = val
+        if n < 3:
+            unsure.append("name")
+    cat = [m.upper() for t in texts for m in re.findall(r"(?<![A-Za-z])([A-Da-d])\s?-\s?[A-Za-z]{3,}", t)]
+    val, n = _top(cat, 2)
+    if val:
+        raw["category"] = val
+    dates = [d for t in texts for d in _date_cands(t)]
+    yr = date.today().year
+    for key, pick in (("dob", [d for d in dates if int(d[:4]) <= yr - 16]),
+                      ("expiry_date", [d for d in dates if int(d[:4]) >= yr - 1])):
+        val, n = _top(pick, 2)
+        if val:
+            raw[key] = val
+            if n < 3:
+                unsure.append(key)
+    raw["uncertain_fields"] = unsure
+    return raw
+
+
+def _tesseract_read(img, kind):
+    if kind == "card":
+        return _read_card_tesseract(img)
+    best = {}
+    for ang in (0, 90, 180, 270):
+        text = to_western(_ocr(img.rotate(ang, expand=True), 1.5, 6, "ara+eng")
+                          + "\n" + _ocr(img.rotate(ang, expand=True), 1.5, 11, "ara+eng"))
+        for m in re.findall(r"(?<!\d)\d{14}(?!\d)", text.replace(" ", "")):
+            if _S_parse_nid(m):
+                best[m] = best.get(m, 0) + 1
+    raw = {"uncertain_fields": ["national_id"]}
+    if best:
+        raw["national_id"] = max(best, key=best.get)
+    return raw
+
+
+# ───────────────────────── التنظيف والتحقق ─────────────────────────
+def _clean_name(v):
+    v = to_western(v) if isinstance(v, str) else None
+    if not v:
+        return None
+    v = re.sub(r"[\d\|_:;,.\-]+", " ", v)
+    v = re.sub(r"\s+", " ", v).strip()
+    return v if len(v) >= 3 else None
+
+
+def postprocess(raw, kind):
+    """يرجّع (data، uncertain، warnings). مفيش تخمين: أي قيمة مش سليمة بتتشال."""
+    data, warnings = {}, []
+    uncertain = {UI_KEY[f] for f in (raw.get("uncertain_fields") or []) if f in UI_KEY}
+    name = _clean_name(raw.get("name"))
+    if name:
+        data["name"] = name
+    if kind == "nid":
+        nid = re.sub(r"\D", "", to_western(_S_nn(raw.get("national_id")) or ""))
+        if nid:
+            info = _S_parse_nid(nid)
+            if info:  # الميلاد والنوع بيتحسبوا من الرقم نفسه
+                data["national_id"] = nid
+                data.update(info)
+            else:
+                warnings.append("scan_nid_bad")
+        if raw.get("is_national_id") is False:
+            warnings.append("scan_not_nid")
+    else:
+        card = re.sub(r"[\s\-]", "", to_western(_S_nn(raw.get("card_no")) or ""))
+        if card:
+            data["card_no"] = card
+            if len(card) < 8:
+                uncertain.add("c_card")
+        cat = _S_norm_category(raw.get("category"))
+        if cat:
+            data["category"] = cat
+        for src, dst in (("dob", "dob"), ("expiry_date", "source_end")):
+            iso = _S_to_iso(to_western(_S_nn(raw.get(src))))
+            if iso:
+                data[dst] = iso
+    return data, sorted(uncertain), warnings
+
+
+def read_document(file, kind):
+    """kind = 'nid' | 'card'. يرجّع dict فيه data / uncertain / warnings / engine / errors."""
+    out = {"data": {}, "uncertain": [], "warnings": [], "engine": None, "errors": []}
+    try:
+        jpeg, img = prepare_image(file)
+    except Exception as e:  # noqa: BLE001
+        out["errors"].append(f"image: {e}")
+        return out
+    raw = None
+    if claude_available():
+        try:
+            raw, out["engine"] = _call_claude(jpeg, kind), "claude"
+        except Exception as e:  # noqa: BLE001
+            out["errors"].append(str(e)[:200])
+    if raw is None and tesseract_available():
+        raw, out["engine"] = _tesseract_read(img, kind), "tesseract"
+    if raw is None:
+        return out
+    out["data"], out["uncertain"], out["warnings"] = postprocess(raw, kind)
+    if out["engine"] == "tesseract" and kind == "nid":
+        out["warnings"].append("scan_ocr_limited")  # الاسم العربي بالـ OCR العادي غير موثوق: بيتكتب يدوي
+    return out
+
+
+def read_all(nid_file, card_file):
+    """يقرا الصورتين ويدمجهم: الاسم/الرقم القومي/الميلاد/النوع من البطاقة، والكارت/الفئة/الانتهاء من الكارنيه."""
+    nid = read_document(nid_file, "nid") if nid_file else None
+    card = read_document(card_file, "card") if card_file else None
+    res = {"data": {}, "uncertain": set(), "warnings": [], "engine": None, "errors": []}
+    for part in (card, nid):  # البطاقة تكسب في الاسم والميلاد
+        if not part:
+            continue
+        res["data"].update({k: v for k, v in part["data"].items()
+                            if not (res["data"].get(k) and k == "dob" and part is card)})
+        res["uncertain"] |= set(part["uncertain"])
+        res["warnings"] += part["warnings"]
+        res["errors"] += part["errors"]
+        res["engine"] = "claude" if "claude" in (res["engine"], part["engine"]) else (res["engine"] or part["engine"])
+    if nid and card:
+        n, c = nid["data"], card["data"]
+        # تاريخ الميلاد على الكارنيه لو مختلف عن اللي في الرقم القومي: نحذّر ونعتمد الرقم القومي
+        if n.get("dob") and c.get("dob") and n["dob"] != c["dob"]:
+            res["warnings"].append("scan_dob_mismatch")
+            res["data"]["dob"] = n["dob"]
+    res["uncertain"] = sorted(res["uncertain"])
+    res["warnings"] = list(dict.fromkeys(res["warnings"]))
+    return res
+
+# --- Wrapper for old code: same interface as before ---
 def extract_from_id_image(image_file, manual_angle=0):
-    """
-    Scan من v4_2 - ocr.py:
-    - لو ANTHROPIC_API_KEY موجود في Secrets: Claude Vision (دقة أعلى)
-    - لو مش موجود: tesseract + قص الكارنيه + تصويت (6-12 قراءة، اللي يتكرر هو الصح)
-    مفيش تخمين: اللي مش متأكد منه بيفضل فاضي
-    """
-    import re, base64, io
-    from PIL import Image, ImageOps, ImageEnhance
+    """Wrapper حول ocr.py اللي شغال معاك: يجرب بطاقة قومي + كارنيه ويدمجهم"""
+    import io as _io
+    from PIL import Image as _PILImage, ImageOps as _Ops
     debug = []
-    # --- جهز الصورة ---
     try:
         raw = image_file.getvalue() if hasattr(image_file, "getvalue") else image_file.read()
-        # رجع المؤشر للبداية عشان st.image يقدر يقراها تاني
         try:
             image_file.seek(0)
         except:
             pass
-        img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
+        # لو المستخدم اختار تدوير يدوي، طبقه قبل الـ Scan
         if manual_angle != 0:
-            img = img.rotate(manual_angle, expand=True)
+            _img = _Ops.exif_transpose(_PILImage.open(_io.BytesIO(raw))).convert("RGB")
+            _img = _img.rotate(manual_angle, expand=True)
+            _buf = _io.BytesIO()
+            _img.save(_buf, "JPEG", quality=88)
+            # اعمل ملف وهمي بنفس واجهة Streamlit UploadedFile
+            class _F:
+                def __init__(self, b): self._b=b
+                def getvalue(self): return self._b
+                def read(self): return self._b
+            image_file = _F(_buf.getvalue())
             debug.append(f"manual rotate {manual_angle}")
     except Exception as e:
-        return {"name": "", "dob": "", "national_id": "", "raw_text": "", "debug": [f"open error {e}"]}
-    # --- 1) Claude لو الـ Key موجود ---
-    api_key = None
+        return {"name": "", "dob": "", "national_id": "", "card_no": "", "policy_holder": "", "raw_text": "", "debug": [f"open error {e}"]}
+    # جرب الاثنين: بطاقة قومي الأول، بعدين كارنيه، وادمج
+    # read_all بيعمل كده بالظبط - بناديه بنفس الملف مرتين
     try:
-        api_key = st.secrets.get("ANTHROPIC_API_KEY", None)
-    except:
-        api_key = None
-    if api_key:
-        try:
-            import anthropic
-            # صغّر الصورة لـ 1600 زي v4_2
-            small = img.copy()
-            scale = 1600 / max(small.size)
-            if scale < 1:
-                small = small.resize((int(small.width*scale), int(small.height*scale)), Image.LANCZOS)
-            buf = io.BytesIO()
-            small.save(buf, "JPEG", quality=88)
-            jpeg = buf.getvalue()
-            client = anthropic.Anthropic(api_key=api_key)
-            # جرب بطاقة قومي الأول، لو مش بطاقة جرب كارنيه
-            for kind, prompt in [
-                ("nid", "ده تصوير لبطاقة رقم قومي مصرية. استخرج الاسم الكامل بالعربي والرقم القومي (14 رقم). حوّل الأرقام الهندية لأرقام إنجليزية. متخمّنش: لو حاجة مش واضحة سيبها null."),
-                ("card", "ده تصوير لكارنيه تأمين صحي. استخرج اسم المؤمن عليه ورقم الكارت والفئة وتاريخ الميلاد وتاريخ الانتهاء لو موجودين. انسخ رقم الكارت حرف بحرف، ومتخمّنش."),
-            ]:
-                try:
-                    resp = client.messages.create(model="claude-sonnet-4-5", max_tokens=800, messages=[{"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}}, {"type": "text", "text": prompt}]}])
-                    txt = ""
-                    for block in resp.content:
-                        if hasattr(block, "text"):
-                            txt += block.text
-                    debug.append(f"Claude {kind} raw: {txt[:300]}")
-                    # استخرج 14 رقم
-                    m = re.findall(r"\d{14}", txt.replace(" ", "").replace("\n",""))
-                    nid = m[0] if m else ""
-                    # استخرج اسم - أول سطر طويل فيه حروف
-                    name = ""
-                    for line in txt.split("\n"):
-                        line = line.strip()
-                        if len(line) >= 4 and any(c.isalpha() for c in line) and "رقم" not in line and "تاريخ" not in line:
-                            # شيل أي labels
-                            if ":" in line:
-                                line = line.split(":")[-1].strip()
-                            if len(line) >= 4:
-                                name = line
-                                break
-                    if nid or name:
-                        debug.append(f"Claude SUCCESS {kind}: name={name} nid={nid}")
-                        return {"name": name, "dob": "", "national_id": nid, "card_no": "", "policy_holder": "", "raw_text": txt, "debug": debug}
-                except Exception as e:
-                    debug.append(f"Claude {kind} fail: {str(e)[:200]}")
-                    continue
-        except Exception as e:
-            debug.append(f"Claude not available: {e}")
-    # --- 2) RapidOCR - مش محتاج tesseract ولا opencv، بيشتغل من requirements بس ---
-    try:
-        from rapidocr_onnxruntime import RapidOCR
-        import numpy as np
-        engine = RapidOCR()
-        # جرب الصورة معدولة + مقلوبة 90
-        for _ang in [0, 90, 180, 270]:
-            _v = img.rotate(_ang, expand=True) if _ang != 0 else img.copy()
-            _w, _h = _v.size
-            try:
-                _v = _v.resize((_w*2, _h*2), Image.LANCZOS)
-            except:
-                pass
-            try:
-                result, _ = engine(np.array(_v))
-                if result:
-                    txt = "\n".join([line[1] for line in result])
-                    debug.append(f"RapidOCR angle {_ang} len {len(txt)}: {txt[:200]}")
-                    if len(txt.strip()) > 10:
-                        # استخرج منه
-                        import re as _re
-                        _m = _re.findall(r"\d{14}", txt.replace(" ","").replace("\n",""))
-                        _nid = _m[0] if _m else ""
-                        _cm = _re.search(r"([A-F0-9]{10,})", txt.replace(" ","").replace("\n",""))
-                        _card = _cm.group(1) if _cm else ""
-                        _name = ""
-                        _im = _re.search(r"Insured\s*Name\s*:?\s*([A-Za-z ]+)", txt, _re.IGNORECASE)
-                        if _im:
-                            _name = _im.group(1).strip()
-                        else:
-                            for _ln in txt.split("\n"):
-                                _ln = _ln.strip()
-                                if any(k in _ln.lower() for k in ["allianz","nextcare","policy","card no","category","expiry","dental","optical"]):
-                                    continue
-                                _words = _re.findall(r"[A-Z][A-Z]+", _ln)
-                                if len(_words) >= 2:
-                                    _name = " ".join(_words[:4])
-                                    break
-                        _dob = ""
-                        _dm = _re.search(r"(\d{1,2}[-/]\w{3}[-/]\d{2,4})", txt)
-                        if _dm:
-                            _dob = _dm.group(1)
-                        if _name or _nid or _card:
-                            debug.append(f"RapidOCR SUCCESS name={_name} nid/card={_nid or _card}")
-                            return {"name": _name, "dob": _dob, "national_id": _nid if _nid else _card, "card_no": _card, "policy_holder": "", "raw_text": txt, "debug": debug}
-            except Exception as e:
-                debug.append(f"RapidOCR angle {_ang} fail: {e}")
-                continue
-        debug.append("RapidOCR: مفيش بيانات، هجرب tesseract")
+        res = read_all(image_file, image_file)
     except Exception as e:
-        debug.append(f"RapidOCR not available: {e} - هيجرب tesseract")
-
-    # --- 2.5) OCR.space API - بيشتغل من غير أي تثبيت، حتى لو tesseract و RapidOCR و opencv مش موجودين ---
-    # ده الحل اللي هيشتغل عندك دلوقتي مهما كان وضع packages.txt
-    try:
-        import urllib.request, urllib.parse, json as _json
-        debug.append("Trying OCR.space API (no install needed)...")
-        # جهز الصورة - صغّرها شوية عشان الـ API
-        _small = img.copy()
-        _scale = 1200 / max(_small.size)
-        if _scale < 1:
-            _small = _small.resize((int(_small.width*_scale), int(_small.height*_scale)), Image.LANCZOS)
-        _buf = io.BytesIO()
-        _small.save(_buf, "JPEG", quality=85)
-        _img_bytes = _buf.getvalue()
-        # ابعت لـ OCR.space - مفتاح تجريبي مجاني helloworld
-        _b64 = base64.b64encode(_img_bytes).decode()
-        _data = urllib.parse.urlencode({"apikey": "helloworld", "base64Image": f"data:image/jpeg;base64,{_b64}", "language": "eng", "isOverlayRequired": False, "OCREngine": "2", "scale": "true"}).encode()
-        _req = urllib.request.Request("https://api.ocr.space/parse/image", data=_data, headers={"Content-Type": "application/x-www-form-urlencoded"})
-        with urllib.request.urlopen(_req, timeout=30) as _resp:
-            _res = _json.loads(_resp.read().decode())
-        _txt = ""
+        debug.append(f"read_all fail: {e}")
+        return {"name": "", "dob": "", "national_id": "", "card_no": "", "policy_holder": "", "raw_text": "", "debug": debug}
+    data = res.get("data", {})
+    debug += res.get("errors", [])
+    debug.append(f"engine={res.get('engine')} warnings={res.get('warnings')} uncertain={res.get('uncertain')}")
+    # لو tesseract بس هو اللي اشتغل ومفيش Claude، جرب OCR.space كاحتياطي أخير - من غير تثبيت
+    if not data.get("name") and not data.get("national_id") and not data.get("card_no"):
         try:
-            _txt = _res["ParsedResults"][0]["ParsedText"]
-        except:
+            import urllib.request, urllib.parse, json as _json, base64 as _b64
+            debug.append("Trying OCR.space (no install) as last fallback...")
+            jpeg2, img2 = prepare_image(image_file)
+            _buf2 = _io.BytesIO()
+            img2.save(_buf2, "JPEG", quality=85)
+            _b64s = _b64.b64encode(_buf2.getvalue()).decode()
+            _payload = urllib.parse.urlencode({"apikey": "helloworld", "base64Image": f"data:image/jpeg;base64,{_b64s}", "language": "eng", "isOverlayRequired": False, "OCREngine": "2", "scale": "true"}).encode()
+            _req = urllib.request.Request("https://api.ocr.space/parse/image", data=_payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
+            with urllib.request.urlopen(_req, timeout=30) as _resp:
+                _r = _json.loads(_resp.read().decode())
             _txt = ""
-        debug.append(f"OCR.space len {len(_txt)}: {_txt[:300]}")
-        if _txt and len(_txt.strip()) > 10:
-            import re as _re2
-            _m2 = _re2.findall(r"\d{14}", _txt.replace(" ","").replace("\n",""))
-            _nid2 = _m2[0] if _m2 else ""
-            _cm2 = _re2.search(r"([A-F0-9]{10,})", _txt.replace(" ","").replace("\n",""))
-            _card2 = _cm2.group(1) if _cm2 else ""
-            _name2 = ""
-            _im2 = _re2.search(r"Insured\s*Name\s*:?\s*([A-Za-z ]+)", _txt, _re2.IGNORECASE)
-            if _im2:
-                _name2 = _im2.group(1).strip()
-            else:
-                for _ln in _txt.split("\n"):
-                    _ln = _ln.strip()
-                    if any(k in _ln.lower() for k in ["allianz","nextcare","policy","card no","category","expiry","dental","optical"]):
-                        continue
-                    _words = _re2.findall(r"[A-Z][A-Z]+", _ln)
-                    if len(_words) >= 2:
-                        _name2 = " ".join(_words[:4])
-                        break
-            _dob2 = ""
-            _dm2 = _re2.search(r"(\d{1,2}[-/]\w{3}[-/]\d{2,4})", _txt)
-            if _dm2:
-                _dob2 = _dm2.group(1)
-            if _name2 or _nid2 or _card2:
-                debug.append(f"OCR.space SUCCESS name={_name2} nid/card={_nid2 or _card2}")
-                return {"name": _name2, "dob": _dob2, "national_id": _nid2 if _nid2 else _card2, "card_no": _card2, "policy_holder": "", "raw_text": _txt, "debug": debug}
-            else:
-                debug.append("OCR.space: قرا نص بس مفيش اسم/رقم - هجرب tesseract")
-                # لو قرا نص بس مفيش بيانات، رجّع النص عشان يبان في التشخيص
-                # وكمل لـ tesseract
-        else:
-            debug.append("OCR.space: رجّع نص فاضي - ممكن الصورة محتاجة تدوير، جرب لف 90")
-    except Exception as e:
-        debug.append(f"OCR.space fail: {str(e)[:200]} - هيجرب tesseract")
-
-    # --- 3) tesseract بالتصويت + قص الكارنيه - من v4_2 ---
-    def _gray(im, scale):
-        g = ImageOps.grayscale(im.resize((int(im.width*scale), int(im.height*scale)), Image.LANCZOS))
-        return ImageEnhance.Contrast(g).enhance(1.8)
-    def _ocr(im, scale, psm, lang="eng"):
-        try:
-            import pytesseract
-            return pytesseract.image_to_string(_gray(im, scale), lang=lang, config=f"--psm {psm}")
-        except:
-            return ""
-    def _order_pts(pts):
-        import numpy as np
-        s, d = pts.sum(1), np.diff(pts, axis=1).ravel()
-        return np.array([pts[np.argmin(s)], pts[np.argmin(d)], pts[np.argmax(s)], pts[np.argmax(d)]], dtype="float32")
-    def _crop_card(im):
-        try:
-            import cv2, numpy as np
-            bgr = cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
-            h, w = bgr.shape[:2]
-            b = cv2.cvtColor(cv2.GaussianBlur(bgr, (9, 9), 0), cv2.COLOR_BGR2LAB)[:, :, 2]
-            _, th = cv2.threshold(b, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-            th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, np.ones((31, 31), np.uint8))
-            th = cv2.morphologyEx(th, cv2.MORPH_OPEN, np.ones((15, 15), np.uint8))
-            cs, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if not cs:
-                return None
-            c = max(cs, key=cv2.contourArea)
-            rect = cv2.minAreaRect(c)
-            cw, ch = rect[1]
-            if cv2.contourArea(c) < 0.15*h*w or not (1.3 < max(cw, ch)/max(1, min(cw, ch)) < 2.0):
-                return None
-            box = _order_pts(cv2.boxPoints(rect))
-            wd = int(max(np.linalg.norm(box[0]-box[1]), np.linalg.norm(box[3]-box[2])))
-            ht = int(max(np.linalg.norm(box[0]-box[3]), np.linalg.norm(box[1]-box[2])))
-            m = cv2.getPerspectiveTransform(box, np.array([[0,0],[wd,0],[wd,ht],[0,ht]], dtype="float32"))
-            warp = cv2.warpPerspective(bgr, m, (wd, ht))
-            if warp.shape[0] > warp.shape[1]:
-                warp = cv2.rotate(warp, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            debug.append("crop_card SUCCESS - قصيت الكارت وعدّلته")
-            return Image.fromarray(cv2.cvtColor(warp, cv2.COLOR_BGR2RGB))
+            try:
+                _txt = _r["ParsedResults"][0]["ParsedText"]
+            except:
+                _txt = ""
+            debug.append(f"OCR.space len {len(_txt)}: {_txt[:300]}")
+            if _txt and len(_txt.strip()) > 10:
+                import re as _re2
+                _m = _re2.findall(r"\d{14}", _txt.replace(" ",""))
+                if _m:
+                    data["national_id"] = _m[0]
+                _cm = _re2.search(r"([A-F0-9]{10,})", _txt.replace(" ",""))
+                if _cm:
+                    data["card_no"] = _cm.group(1)
+                _im = _re2.search(r"Insured\s*Name\s*:?\s*([A-Za-z ]+)", _txt, _re2.IGNORECASE)
+                if _im:
+                    data["name"] = _im.group(1).strip()
+                else:
+                    for _ln in _txt.split("\n"):
+                        _ln=_ln.strip()
+                        if any(k in _ln.lower() for k in ["allianz","nextcare","policy","card no","category","expiry","dental","optical"]):
+                            continue
+                        _w = _re2.findall(r"[A-Z][A-Z]+", _ln)
+                        if len(_w)>=2:
+                            data["name"]=" ".join(_w[:4])
+                            break
+                _dm = _re2.search(r"(\d{1,2}[-/]\w{3}[-/]\d{2,4})", _txt)
+                if _dm:
+                    data["dob"]=_dm.group(1)
+                return {"name": data.get("name",""), "dob": data.get("dob","") or data.get("source_end",""), "national_id": data.get("national_id","") or data.get("card_no",""), "card_no": data.get("card_no",""), "policy_holder": "", "raw_text": _txt, "debug": debug}
         except Exception as e:
-            debug.append(f"crop_card fail: {e}")
-            return None
-    def _norm_hex(tok):
-        tt = tok.upper().replace("O","0").replace("Q","0").replace("I","1").replace("L","1")
-        return tt if re.fullmatch(r"[0-9A-F]{12,20}", tt) else None
-    # قص الكارت الأول
-    cropped = _crop_card(img)
-    base = cropped if cropped is not None else img
-    # اختار الاتجاه الصح بالتصويت على كلمات الكارنيه
-    _KEYWORDS = ("card","insured","category","expiry","holder","national")
-    def _hits(text):
-        tl = text.lower()
-        return sum(k in tl for k in _KEYWORDS)
-    best_angle, best_score = 0, -1
-    for ang in (0, 90, 180, 270):
-        sc = _hits(_ocr(base.rotate(ang, expand=True), 1.2, 6))
-        if sc > best_score:
-            best_score, best_angle = sc, ang
-    debug.append(f"best angle {best_angle} score {best_score}")
-    card = base.rotate(best_angle, expand=True)
-    # 6 قراءات بالتوازي - التصويت
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        texts = list(ex.map(lambda p: _ocr(card, p[0], p[1]), ((1,4),(1,11),(1.5,11),(2,11),(1,6),(2,4))))
-    text_all = "\n".join(texts)
-    debug.append(f"tesseract texts len: {len(text_all)}")
-    # تصويت على رقم الكارت
-    from collections import Counter
-    hexes = []
-    for txt in texts:
-        for tok in re.findall(r"[0-9A-Za-z]{12,20}", txt):
-            h = _norm_hex(tok)
-            if h:
-                hexes.append(h)
-    card_no = ""
-    if hexes:
-        val, n = Counter(hexes).most_common(1)[0]
-        if n >= 2:
-            card_no = val
-            debug.append(f"card_no voted {card_no} votes {n}")
-    # تصويت على الاسم
-    _BAD = re.compile(r"(?i)college|school|international|company|group|academy|universit|institute|hospital|ltd|limited|holder|insured|national|category|co-?pay|dental|optical|maternity|expiry|drugs|nextcare|allianz|single|family|card")
-    def _clean_words(s):
-        s = re.sub(r"[^A-Za-z' \-]", " ", s or "")
-        words = [w for w in s.split() if len(w) >= 2]
-        return " ".join(words) if 2 <= len(words) <= 5 and not _BAD.search(s) else None
-    name_cands = []
-    for txt in texts:
-        lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
-        for i, ln in enumerate(lines):
-            if not re.search(r"(?i)insured|name\s*:", ln):
-                continue
-            tail = _clean_words(ln.split(":")[-1]) if ":" in ln else None
-            if tail:
-                name_cands.append(tail)
-                continue
-            for j in (i-1, i+1):
-                if 0 <= j < len(lines):
-                    c = _clean_words(lines[j].split(":")[-1])
-                    if c:
-                        name_cands.append(c)
-    name = ""
-    if name_cands:
-        val, n = Counter(name_cands).most_common(1)[0]
-        if n >= 2:
-            name = val
-            debug.append(f"name voted {name} votes {n}")
-    # تاريخ الميلاد - DoB: 12-Nov-83
-    dob = ""
-    _MONTHS = {m:i for i,m in enumerate(["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"],1)}
-    for txt in texts:
-        m = re.search(r"(\d{1,2})\s?[-–]?\s?([A-Za-z]{3})\s?[-–]?\s?(\d{4}|\d{2})", txt)
-        if m:
-            mo = _MONTHS.get(m.group(2).lower())
-            if mo:
-                y = int(m.group(3))
-                y = y if y>99 else (1900+y if y>30 else 2000+y)
-                dob = f"{m.group(1)}-{m.group(2)}-{y}"
-                break
-    # رقم قومي 14 رقم - للبطاقة
-    nid = ""
-    # جرب البطاقة بـ ara+eng
-    if not card_no:
-        for ang in (0,90,180,270):
-            txt2 = _ocr(img.rotate(ang, expand=True), 1.5, 6, "ara+eng") + "\n" + _ocr(img.rotate(ang, expand=True), 1.5, 11, "ara+eng")
-            mm = re.findall(r"(?<!\d)\d{14}(?!\d)", txt2.replace(" ",""))
-            if mm:
-                nid = mm[0]
-                debug.append(f"nid found {nid}")
-                break
-    # لو لسه مفيش اسم عربي، دور على عربي
-    if not name:
-        for txt in texts:
-            lines = [l.strip() for l in txt.split("\n") if l.strip()]
-            arabic = [l for l in lines if sum(1 for ch in l if '\u0600' <= ch <= '\u06FF') >= 4]
-            if arabic:
-                name = max(arabic, key=len)[:50]
-                break
-    final_nid = nid if nid else card_no
-    debug.append(f"FINAL name={name} nid/card={final_nid} dob={dob}")
-    return {"name": name, "dob": dob, "national_id": final_nid, "card_no": card_no, "policy_holder": "", "raw_text": text_all, "debug": debug}
+            debug.append(f"OCR.space fail: {str(e)[:200]}")
+    return {"name": data.get("name",""), "dob": data.get("dob",""), "national_id": data.get("national_id","") or data.get("card_no",""), "card_no": data.get("card_no",""), "policy_holder": "", "raw_text": f"engine={res.get('engine')} data={data} warnings={res.get('warnings')}", "debug": debug}
+
 
 # --- PDF CARD FUNCTION ---
 def generate_card_pdf(name, staff_id, national_id, plan, dependency, company="Myshurance"):
@@ -754,52 +933,32 @@ with tab0:
         st.info("No companies yet - دوس على زرار إضافة العملاء الأربعة فوق")
     else:
         st.dataframe(df_comp, use_container_width=True)
-        st.divider()
-        st.subheader("🗑 حذف شركة - زي CAC (321)")
-        st.caption("اختار الشركة اللي عايز تمسحها، زي CAC اللي كانت تجربة، ودوس حذف")
-        del_comp_name = st.selectbox("اختار الشركة للحذف", df_comp["Company Name"].astype(str).tolist(), key="del_company_sel")
-        if st.button(f"🗑 امسح {del_comp_name} نهائياً", use_container_width=True, key="btn_del_company"):
-            # امسح من الشيت
-            ws_c = get_sheet().worksheet("companies")
-            all_vals = ws_c.get_all_values()
-            # الصف الأول هيدر، دور على الصف اللي فيه الاسم
-            for idx, row in enumerate(all_vals[1:], start=2):
-                if row and row[0].strip() == del_comp_name.strip():
-                    ws_c.delete_rows(idx)
-                    break
-            st.success(f"تم مسح {del_comp_name} ✅")
-            st.rerun()
 
 with tab1:
+
     st.subheader("➕ Add New Member - إضافة بالـ Scan")
     st.caption("ارفع صورة البطاقة أو الكارنيه، السيستم هيملي البيانات لوحده، انت راجع بس قبل ما تدوس Save")
-    st.info("💡 عشان الـ Scan ينجح: صور البطاقة **معدولة مش مقلوبة**، في نور كويس، والكلام واضح ومش مهزوز. الصورة المقلوبة أو البعيدة مش هتتقري.")
-    # --- Scan Section ---
+    st.info("💡 عشان الـ Scan ينجح: صور البطاقة **معدولة مش مقلوبة**، في نور كويس، والكلام واضح ومش مهزوز.")
     scan_file = st.file_uploader("📸 Scan البطاقة الشخصية أو الكارنيه - ارفع الصورة هنا", type=["jpg","jpeg","png"], key="scan_id")
     if scan_file is not None:
         st.image(scan_file, caption="الصورة اللي اترفعت - راجعها", width=350)
-        # تشخيص المحركات - بيبان على طول عشان نعرف المشكلة فين
         try:
-            import pytesseract
-            _tes = pytesseract.get_tesseract_version()
-            st.info(f"✅ tesseract شغال: {_tes}")
-        except Exception as e:
-            st.error(f"❌ tesseract مش موجود: {e} - المشكلة في packages.txt، مش في الصورة")
+            import pytesseract as _pt
+            st.info(f"✅ tesseract شغال: {_pt.get_tesseract_version()}")
+        except Exception as _e:
+            st.error(f"❌ tesseract مش موجود: {_e} - اتأكد ان packages.txt موجود واسمه small")
         try:
-            import cv2
-            st.info(f"✅ opencv شغال: {cv2.__version__}")
-        except Exception as e:
-            st.warning(f"⚠ opencv مش موجود: {e} - قص الكارنيه مش هيشتغل")
+            import cv2 as _cv
+            st.info(f"✅ opencv شغال: {_cv.__version__}")
+        except Exception as _e:
+            st.warning(f"⚠ opencv مش موجود: {_e}")
         try:
-            _key = st.secrets.get("ANTHROPIC_API_KEY", "")
-            if _key:
-                st.info("✅ Claude Key موجود - هيشتغل بـ Claude")
-            else:
-                st.info("ℹ مفيش Claude Key - هيشتغل بـ tesseract بالتصويت")
+            _k = st.secrets.get("ANTHROPIC_API_KEY", "")
+            st.info("✅ Claude Key موجود" if _k else "ℹ مفيش Claude Key - هيشتغل بـ tesseract بالتصويت")
         except:
-            st.info("ℹ مفيش Claude Key - هيشتغل بـ tesseract")
+            st.info("ℹ مفيش Claude Key")
         manual_angle = st.selectbox("لو الصورة مايلة / مقلوبة، عدّلها من هنا الأول:", [0, 90, 180, 270], format_func=lambda x: {0: "معدولة ✅", 90: "لف 90 درجة", 180: "لف 180 درجة", 270: "لف 270 درجة"}[x], key="scan_rotate")
-        st.caption("جرب 90 لو الكارنيه متصور بالعرض زي صورة FATEMA - والـ Scan دلوقتي بيشتغل من غير أي تثبيت عن طريق OCR.space")
+        st.caption("جرب 90 لو الكارنيه متصور بالعرض زي صورة FATEMA")
         if st.button("🔍 اعمل Scan واملا البيانات لوحدها", use_container_width=True):
             with st.spinner("بقرا البطاقة... ثواني"):
                 res = extract_from_id_image(scan_file, manual_angle=manual_angle)
@@ -810,35 +969,27 @@ with tab1:
                 st.session_state["scan_debug"] = res.get("debug", [])
                 st.session_state["scan_done"] = True
             with st.expander("🔍 شوف اللي اتقرا من الصورة - للتشخيص", expanded=True):
-                st.write(f"طول النص اللي اتقرا: {len(res.get('raw_text',''))} حرف")
-                st.text(res.get("raw_text","")[:3000] or "(مفيش نص اتقرا خالص)")
+                st.write(f"طول النص: {len(res.get('raw_text',''))} حرف")
+                st.text(res.get("raw_text","")[:3000] or "(مفيش نص اتقرا)")
                 st.divider()
-                st.write("التشخيص:")
                 for d in res.get("debug", []):
                     st.text(d)
-            # اظهر التشخيص على طول من غير ما تدوس
             st.write("**التشخيص:**")
             for d in res.get("debug", [])[:10]:
                 st.text(d)
-            st.write(f"طول النص اللي اتقرا: {len(res.get('raw_text',''))} حرف")
             if res["national_id"] or res["name"]:
-                st.success(f"تم القراءة ✅ - الاسم: {res['name']} | الرقم: {res['national_id']} | الميلاد: {res['dob']} | المدرسة: {res.get('policy_holder','')}")
-                st.info("راجع البيانات تحت، لو فيه حاجة غلط عدّلها قبل ما تدوس Save - انت المراجع بس")
+                st.success(f"تم القراءة ✅ - الاسم: {res['name']} | الرقم: {res['national_id']} | الميلاد: {res['dob']}")
             else:
-                st.warning("مقدرتش أقرا كل البيانات من الصورة - اتأكد ان الصورة واضحة، وعدّل البيانات يدوي تحت")
-                if res["raw_text"]:
-                    with st.expander("شوف النص اللي اتقرا"):
-                        st.text(res["raw_text"])
+                st.warning("مقدرتش أقرا كل البيانات - اتأكد ان الصورة واضحة، وعدّل يدوي تحت")
     if "scan_name" not in st.session_state:
         st.session_state["scan_name"] = ""
         st.session_state["scan_dob"] = ""
         st.session_state["scan_nid"] = ""
-    # لو الاسم ثلاثي، نقسمه First / Family
     _scan_full = st.session_state.get("scan_name","")
     _parts = _scan_full.split()
     _def_first = " ".join(_parts[:2]) if len(_parts)>=2 else _scan_full
     _def_family = " ".join(_parts[2:]) if len(_parts)>2 else ""
-    st.subheader("Add New Member")
+
     comp_options = df_comp["Company Name"].tolist() if not df_comp.empty else ["No Company"]
     selected_comp = st.selectbox("Select Company / اختار المدرسة", comp_options)
     # عرض Policy Number و Provider للشركة المختارة
@@ -850,17 +1001,16 @@ with tab1:
             st.info(f"📌 Policy: {crow.get('Policy Name','')} | Number: {pnum} | Provider: {prov}")
     with st.form("add_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        staff_id = c1.text_input("Staff ID - كمله يدوي")
+        staff_id = c1.text_input("Staff ID")
         first_name = c1.text_input("* First Name - من الـ Scan", value=_def_first)
         family_name = c2.text_input("* Family Name - باقي الاسم", value=_def_family)
         dependency = c2.selectbox("* Dependency", ["Employee", "Spouse", "Child", "Parent"])
         gender = c1.selectbox("* Gender", ["Male", "Female"])
-        dob = c1.date_input("* Date of Birth - راجع من البطاقة")
-        st.caption(f"تاريخ الميلاد من الـ Scan: {st.session_state.get('scan_dob','')} - لو صح عدّله في التقويم فوق")
+        dob = c1.date_input("* Date of Birth")
         plan = c2.selectbox("* Plan", ["Plan A", "Plan B", "Plan C"])
         provider_add = c1.selectbox("Insurance Provider / شركة التأمين", PROVIDERS)
         policy_num_add = c1.text_input("Policy Number / رقم الوثيقة")
-        mobile = c2.text_input("* Mobile Number - كمله يدوي")
+        mobile = c2.text_input("* Mobile Number")
         email = c1.text_input("Email ID")
         iban = c2.text_input("* IBAN / Account Number")
         national_id = c1.text_input("* National ID - من الـ Scan", value=st.session_state.get("scan_nid",""))
@@ -875,21 +1025,12 @@ with tab1:
                 st.success(f"Added {first_name} {family_name} to {selected_comp} ✅")
                 msg = f"New Addition Request - Myshurance:\nCompany: {selected_comp}\nProvider: {provider_add}\nPolicy: {policy_num_add}\nName: {first_name} {family_name}\nStaff ID: {staff_id}\nNational ID: {national_id}\nPlan: {plan}\nMobile: {mobile}"
                 st.session_state["last_wa_msg"] = msg
-                # امسح بيانات الـ Scan بعد الحفظ
-                for k in ["scan_name","scan_dob","scan_nid","scan_done"]:
-                    if k in st.session_state:
-                        del st.session_state[k]
+                for _k in ["scan_name","scan_dob","scan_nid","scan_done"]:
+                    if _k in st.session_state:
+                        del st.session_state[_k]
                 st.rerun()
     st.divider()
     st.subheader("Addition Requests")
-    if not df_add.empty:
-        if st.button("📥 Import to Excel Sheet - تصدير الاكسيل النهائي لشركة التأمين", use_container_width=True, key="export_add_final"):
-            out2 = io.BytesIO()
-            with pd.ExcelWriter(out2, engine="openpyxl") as w2:
-                df_add.to_excel(w2, sheet_name="Addition Final", index=False)
-            out2.seek(0)
-            st.download_button("⬇ حمل ملف الإضافة النهائي", data=out2, file_name=f"Addition_Final_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
-            st.caption("نفس البيانات دي سمعت خلاص في الشيت الأساسي - الشيتات عندك دايماً updated ✅")
     if df_add.empty:
         st.info("No addition requests yet")
     else:
@@ -913,115 +1054,38 @@ with tab1:
             st.download_button(f"Download Card for {s_fname} {s_lname} 🪪", data=pdf_buf, file_name=f"Card_{selected_nid}.pdf", mime="application/pdf", use_container_width=True)
 
 with tab2:
-    st.subheader("➖ حذف / بدل فاقد - اختار المدرسة الأول")
-    st.caption("1- اختار المدرسة  2- دور على العضو بحرف  3- اختار بدل فاقد أو حذف")
-    # 1- اختار المدرسة
-    comp_list_del = df_comp["Company Name"].tolist() if not df_comp.empty else []
-    if not comp_list_del:
-        st.warning("مفيش شركات - ضيف المدارس من تاب Companies الأول")
-    else:
-        sel_school_del = st.selectbox("🏫 اختار المدرسة / اسم الشركة", comp_list_del, key="del_school")
-        # Policy info
-        if sel_school_del in df_comp["Company Name"].astype(str).tolist():
-            _crow = df_comp[df_comp["Company Name"].astype(str)==sel_school_del].iloc[0]
-            st.info(f"📌 {sel_school_del} | Policy: {_crow.get('Policy Name','')} | Number: {_crow.get('Policy Number','')} | Provider: {_crow.get('Provider','')}")
-        # 2- دور على العضو
-        search_member = st.text_input("🔍 دور على العضو - اكتب حرف، مثلاً: ف", placeholder="اكتب أول حرف من الاسم، هيطلعلك كل اللي اسمهم فاطمة...", key="del_search")
-        # فلتر الأعضاء بتوع المدرسة دي - من addition
-        # نحاول نفلتر بالـ Company لو موجود، ولو مش موجود نعرض الكل
-        df_school_members = df_add.copy()
-        if not df_school_members.empty:
-            if "Company" in df_school_members.columns:
-                df_school_members = df_school_members[df_school_members["Company"].astype(str)==sel_school_del]
-                if df_school_members.empty:
-                    # لو مفيش حد مربوط بالمدرسة دي، اعرض الكل عشان متتعطلش
-                    df_school_members = df_add.copy()
-            if search_member:
-                _s = search_member.strip().lower()
-                # دور في First Name و Family Name
-                mask = df_school_members.astype(str).apply(lambda row: _s in str(row.get("* First Name","")).lower() or _s in str(row.get("* Family Name","")).lower() or _s in (str(row.get("* First Name",""))+" "+str(row.get("* Family Name",""))).lower(), axis=1)
-                df_school_members = df_school_members[mask]
-            if df_school_members.empty:
-                st.info("مفيش أعضاء بالاسم ده في المدرسة دي - جرب حرف تاني")
+    st.subheader("Delete Member - لازم صورة الكارت التالف")
+    with st.form("del_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        d_staff = c1.text_input("Staff ID to Delete")
+        d_first = c1.text_input("* First Name")
+        d_family = c2.text_input("* Family Name")
+        d_national = c2.text_input("* National ID")
+        d_reason = st.text_area("Reason for Deletion")
+        d_photo = st.file_uploader("📷 صورة الكارت التالف - إجباري", type=["jpg", "jpeg", "png"])
+        d_submitted = st.form_submit_button("Confirm Deletion 🗑", use_container_width=True)
+        if d_submitted:
+            if not d_first or not d_family or not d_national:
+                st.error("First Name و Family Name و National ID مطلوبين")
+            elif d_photo is None:
+                st.error("❌ مينفعش حذف من غير صورة الكارت التالف")
             else:
-                st.success(f"لقيت {len(df_school_members)} عضو")
-                st.dataframe(df_school_members, use_container_width=True)
-                # اختار العضو
-                nid_col_del = None
-                for c in df_school_members.columns:
-                    if "National" in c:
-                        nid_col_del = c
-                        break
-                if nid_col_del:
-                    # اعرض الاسم + الرقم القومي في القايمة
-                    options = []
-                    for _, r in df_school_members.iterrows():
-                        nm = f"{r.get('* First Name','')} {r.get('* Family Name','')} - {r.get(nid_col_del,'')}"
-                        options.append(nm)
-                    sel_member_label = st.selectbox("اختار العضو اللي عايزه", options, key="del_member_sel")
-                    # هات الصف بتاعه
-                    sel_idx = options.index(sel_member_label)
-                    sel_row = df_school_members.iloc[sel_idx]
-                    s_fname = sel_row.get("* First Name","")
-                    s_lname = sel_row.get("* Family Name","")
-                    s_nid = str(sel_row.get(nid_col_del,""))
-                    s_staff = sel_row.get("Staff ID","")
-                    s_plan = sel_row.get("* Plan","")
-                    st.markdown(f"### العضو المختار: **{s_fname} {s_lname}** | Staff: {s_staff} | Plan: {s_plan} | NID: {s_nid}")
-                    c_a, c_b = st.columns(2)
-                    # --- 1- بدل فاقد = إصدار كارنيه جديد ---
-                    if c_a.button("🪪 1- اصدار بدل فاقد - كارنيه جديد", use_container_width=True, key="btn_replacement"):
-                        pdf_buf2 = generate_card_pdf(f"{s_fname} {s_lname}", s_staff, s_nid, s_plan, sel_row.get("* Dependency",""), sel_school_del)
-                        st.session_state["replacement_pdf"] = pdf_buf2
-                        st.session_state["replacement_name"] = f"{s_fname} {s_lname}"
-                        st.session_state["replacement_nid"] = s_nid
-                        st.success(f"تم إصدار كارنيه بدل فاقد لـ {s_fname} {s_lname} ✅ - حمله من تحت")
-                    if "replacement_pdf" in st.session_state:
-                        st.download_button(f"⬇ حمل كارنيه بدل فاقد - {st.session_state.get('replacement_name','')}", data=st.session_state["replacement_pdf"], file_name=f"Replacement_Card_{st.session_state.get('replacement_nid','')}.pdf", mime="application/pdf", use_container_width=True)
-                    # --- 2- حذف العضو ---
-                    if c_b.button("🗑 2- حذف العضو", use_container_width=True, key="btn_delete_show"):
-                        st.session_state["show_delete_form"] = True
-                    if st.session_state.get("show_delete_form"):
-                        st.divider()
-                        st.markdown("### 🗑 تأكيد الحذف")
-                        st.warning(f"هتحذف {s_fname} {s_lname} من {sel_school_del}؟")
-                        # تاريخ الحذف - بحد أقصى 30 يوم سابقين
-                        from datetime import date, timedelta
-                        today = date.today()
-                        min_date = today - timedelta(days=30)
-                        del_date = st.date_input("تاريخ الحذف - بحد أقصى 30 يوم سابقين", value=today, min_value=min_date, max_value=today, key="del_date_input")
-                        del_reason = st.text_area("سبب الحذف", key="del_reason_input")
-                        del_photo = st.file_uploader("📷 صورة الكارت التالف - إجباري", type=["jpg","jpeg","png"], key="del_photo_input")
-                        if st.button("Confirm حذف ✅ - هيتحول للاكسيل النهائي لشركة التأمين", use_container_width=True, key="confirm_delete_final"):
-                            if del_photo is None:
-                                st.error("❌ مينفعش حذف من غير صورة الكارت التالف")
-                            else:
-                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                photo_name = f"{s_nid}_{timestamp}.{del_photo.name.split('.')[-1]}"
-                                with open(os.path.join(PHOTOS_DIR, photo_name), "wb") as f:
-                                    f.write(del_photo.getbuffer())
-                                new_row = {"Staff ID": s_staff, "* First Name": s_fname, "* Family Name": s_lname, "* Dependency": sel_row.get("* Dependency",""), "* Gender": sel_row.get("* Gender",""), "* Date of Birth": sel_row.get("* Date of Birth",""), "* Plan": s_plan, "* Mobile Number": sel_row.get("* Mobile Number",""), "Email ID": sel_row.get("Email ID",""), "* IBAN/Account Number": sel_row.get("* IBAN/Account Number",""), "* National ID": s_nid, "Company": sel_school_del, "Deletion Date": str(del_date), "Reason": del_reason, "Policy Number": _crow.get("Policy Number","") if '_crow' in locals() else "", "Provider": _crow.get("Provider","") if '_crow' in locals() else ""}
-                                save_to_sheet_gs("deletion", new_row)
-                                st.success(f"تم حذف {s_fname} {s_lname} ✅ - الصف اتحول أوتوماتيك لشيت الحذف النهائي اللي هيتبعت لشركة التأمين")
-                                msg = f"Deletion Request - Myshurance:\nSchool: {sel_school_del}\nName: {s_fname} {s_lname}\nStaff ID: {s_staff}\nNational ID: {s_nid}\nDeletion Date: {del_date}\nReason: {del_reason}"
-                                st.session_state["last_wa_msg"] = msg
-                                if "show_delete_form" in st.session_state:
-                                    del st.session_state["show_delete_form"]
-                                st.rerun()
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                photo_name = f"{d_national}_{timestamp}.{d_photo.name.split('.')[-1]}"
+                with open(os.path.join(PHOTOS_DIR, photo_name), "wb") as f:
+                    f.write(d_photo.getbuffer())
+                new_row = {"Staff ID": d_staff, "* First Name": d_first, "* Family Name": d_family, "* Dependency": "", "* Gender": "", "* Date of Birth": "", "* Plan": "", "* Mobile Number": "", "Email ID": "", "* IBAN/Account Number": "", "* National ID": d_national}
+                save_to_sheet_gs("deletion", new_row)
+                st.success(f"Deleted {d_first} {d_family} ✅")
+                msg = f"Deletion Request - Myshurance:\nName: {d_first} {d_family}\nStaff ID: {d_staff}\nNational ID: {d_national}\nReason: {d_reason}\nDamaged card photo saved."
+                st.session_state["last_wa_msg"] = msg
+                st.rerun()
     st.divider()
-    st.subheader("Deletion Requests - الاكسيل النهائي للحذف")
-    st.caption("ده الشيت اللي هيتبعت لشركة التأمين لتنفيذ الحذف")
+    st.subheader("Deletion Requests")
     if df_del.empty:
         st.info("No deletion requests yet")
     else:
         st.dataframe(df_del, use_container_width=True)
-        # زرار تصدير الحذف النهائي
-        if st.button("📥 تصدير اكسيل الحذف النهائي لشركة التأمين", use_container_width=True, key="export_del_final"):
-            out = io.BytesIO()
-            with pd.ExcelWriter(out, engine="openpyxl") as w:
-                df_del.to_excel(w, sheet_name="Deletion Final", index=False)
-            out.seek(0)
-            st.download_button("⬇ حمل ملف الحذف النهائي", data=out, file_name=f"Deletion_Final_{datetime.now().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
 with tab3:
     st.subheader("Upgrade Member Plan")
