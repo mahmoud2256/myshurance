@@ -119,7 +119,59 @@ def extract_from_id_image(image_file, manual_angle=0):
                     continue
         except Exception as e:
             debug.append(f"Claude not available: {e}")
-    # --- 2) tesseract بالتصويت + قص الكارنيه - من v4_2 ---
+    # --- 2) RapidOCR - مش محتاج tesseract ولا opencv، بيشتغل من requirements بس ---
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+        import numpy as np
+        engine = RapidOCR()
+        # جرب الصورة معدولة + مقلوبة 90
+        for _ang in [0, 90, 180, 270]:
+            _v = img.rotate(_ang, expand=True) if _ang != 0 else img.copy()
+            _w, _h = _v.size
+            try:
+                _v = _v.resize((_w*2, _h*2), Image.LANCZOS)
+            except:
+                pass
+            try:
+                result, _ = engine(np.array(_v))
+                if result:
+                    txt = "\n".join([line[1] for line in result])
+                    debug.append(f"RapidOCR angle {_ang} len {len(txt)}: {txt[:200]}")
+                    if len(txt.strip()) > 10:
+                        # استخرج منه
+                        import re as _re
+                        _m = _re.findall(r"\d{14}", txt.replace(" ","").replace("\n",""))
+                        _nid = _m[0] if _m else ""
+                        _cm = _re.search(r"([A-F0-9]{10,})", txt.replace(" ","").replace("\n",""))
+                        _card = _cm.group(1) if _cm else ""
+                        _name = ""
+                        _im = _re.search(r"Insured\s*Name\s*:?\s*([A-Za-z ]+)", txt, _re.IGNORECASE)
+                        if _im:
+                            _name = _im.group(1).strip()
+                        else:
+                            for _ln in txt.split("\n"):
+                                _ln = _ln.strip()
+                                if any(k in _ln.lower() for k in ["allianz","nextcare","policy","card no","category","expiry","dental","optical"]):
+                                    continue
+                                _words = _re.findall(r"[A-Z][A-Z]+", _ln)
+                                if len(_words) >= 2:
+                                    _name = " ".join(_words[:4])
+                                    break
+                        _dob = ""
+                        _dm = _re.search(r"(\d{1,2}[-/]\w{3}[-/]\d{2,4})", txt)
+                        if _dm:
+                            _dob = _dm.group(1)
+                        if _name or _nid or _card:
+                            debug.append(f"RapidOCR SUCCESS name={_name} nid/card={_nid or _card}")
+                            return {"name": _name, "dob": _dob, "national_id": _nid if _nid else _card, "card_no": _card, "policy_holder": "", "raw_text": txt, "debug": debug}
+            except Exception as e:
+                debug.append(f"RapidOCR angle {_ang} fail: {e}")
+                continue
+        debug.append("RapidOCR: مفيش بيانات، هجرب tesseract")
+    except Exception as e:
+        debug.append(f"RapidOCR not available: {e} - هيجرب tesseract")
+
+    # --- 3) tesseract بالتصويت + قص الكارنيه - من v4_2 ---
     def _gray(im, scale):
         g = ImageOps.grayscale(im.resize((int(im.width*scale), int(im.height*scale)), Image.LANCZOS))
         return ImageEnhance.Contrast(g).enhance(1.8)
