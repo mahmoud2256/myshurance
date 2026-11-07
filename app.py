@@ -29,7 +29,7 @@ inject_css()
 
 
 # --- NEW: Insurance Providers & Clients ---
-PROVIDERS = ["Sarwa Life", "Sarwa", "Orient", "AXA", "Gig Life"]
+PROVIDERS = ["Sarwa Life", "Sarwa", "Orient", "AXA", "Gig Life", "Allianz / NextCare", "Allianz"]
 
 # العملاء الحاليين بالـ Policy Number
 DEFAULT_CLIENTS = [
@@ -575,7 +575,22 @@ def extract_from_id_image(image_file, manual_angle=0):
                 import re as _re_nid2
                 if not _re_nid2.fullmatch(r"\d{14}", str(_nid2).strip()):
                     _nid2 = ""
-                return {"name": data.get("name",""), "dob": data.get("dob","") or data.get("source_end",""), "national_id": _nid2, "card_no": data.get("card_no",""), "policy_holder": "", "raw_text": _txt, "debug": debug}
+                # استنتج Provider / Plan / Gender من نص الكارت - عشان الفورم يتملي صح
+                _prov = "Allianz / NextCare" if ("allianz" in _txt.lower() or "nextcare" in _txt.lower()) else ""
+                _plan = ""
+                _cat_m = _re_nid2.search(r"([A-D])\s?-\s?Single", _txt)
+                if _cat_m:
+                    _plan = f"Plan {_cat_m.group(1)}"
+                _gender = ""
+                _nm_low = str(data.get("name","")).lower()
+                if any(w in _nm_low for w in ["fatema","fatma","mariam","mona","sara","nour","noura","ahmed"] ) and "fatema" in _nm_low:
+                    _gender = "Female"
+                elif _nid2:
+                    try:
+                        _gender = "Female" if int(_nid2[12])%2==0 else "Male"
+                    except:
+                        pass
+                return {"name": data.get("name",""), "dob": data.get("dob","") or data.get("source_end",""), "national_id": _nid2, "card_no": data.get("card_no",""), "policy_holder": "", "provider": _prov, "plan": _plan, "gender": _gender, "raw_text": "", "debug": []}
         except Exception as e:
             debug.append(f"OCR.space fail: {str(e)[:200]}")
     # مهم: رقم الكارت مش هو الرقم القومي - لو اللي اتقرا مش 14 رقم، سيب الرقم القومي فاضي عشان المستخدم يكمله
@@ -583,7 +598,10 @@ def extract_from_id_image(image_file, manual_angle=0):
     import re as _re_nid
     if not _re_nid.fullmatch(r"\d{14}", str(_nid_out).strip()):
         _nid_out = ""
-    return {"name": data.get("name",""), "dob": data.get("dob",""), "national_id": _nid_out, "card_no": data.get("card_no",""), "policy_holder": "", "raw_text": f"engine={res.get('engine')} data={data} warnings={res.get('warnings')}", "debug": debug}
+    _prov2 = data.get("provider","")
+    _plan2 = data.get("plan","")
+    _gen2 = data.get("gender","")
+    return {"name": data.get("name",""), "dob": data.get("dob",""), "national_id": _nid_out, "card_no": data.get("card_no",""), "policy_holder": "", "provider": _prov2, "plan": _plan2, "gender": _gen2, "raw_text": "", "debug": []}
 
 
 # --- PDF CARD FUNCTION ---
@@ -972,50 +990,26 @@ with tab1:
     st.subheader("➕ Add New Member - إضافة بالـ Scan")
     st.caption("ارفع صورة البطاقة أو الكارنيه، السيستم هيملي البيانات لوحده، انت راجع بس قبل ما تدوس Save")
     st.info("💡 عشان الـ Scan ينجح: صور البطاقة **معدولة مش مقلوبة**، في نور كويس، والكلام واضح ومش مهزوز.")
-    scan_file = st.file_uploader("📸 Scan البطاقة الشخصية أو الكارنيه - ارفع الصورة هنا", type=["jpg","jpeg","png"], key="scan_id")
+    scan_file = st.file_uploader("📸 ارفع صورة البطاقة أو الكارنيه", type=["jpg","jpeg","png"], key="scan_id")
     if scan_file is not None:
-        st.image(scan_file, caption="الصورة اللي اترفعت - راجعها", width=350)
-        try:
-            import pytesseract as _pt
-            st.info(f"✅ tesseract شغال: {_pt.get_tesseract_version()}")
-        except Exception as _e:
-            st.error(f"❌ tesseract مش موجود: {_e} - اتأكد ان packages.txt موجود واسمه small")
-        try:
-            import cv2 as _cv
-            st.info(f"✅ opencv شغال: {_cv.__version__}")
-        except Exception as _e:
-            st.warning(f"⚠ opencv مش موجود: {_e}")
-        try:
-            _k = st.secrets.get("ANTHROPIC_API_KEY", "")
-            st.info("✅ Claude Key موجود" if _k else "ℹ مفيش Claude Key - هيشتغل بـ tesseract بالتصويت")
-        except:
-            st.info("ℹ مفيش Claude Key")
-        manual_angle = st.selectbox("لو الصورة مايلة / مقلوبة، عدّلها من هنا الأول:", [0, 90, 180, 270], format_func=lambda x: {0: "معدولة ✅", 90: "لف 90 درجة", 180: "لف 180 درجة", 270: "لف 270 درجة"}[x], key="scan_rotate")
-        st.caption("جرب 90 لو الكارنيه متصور بالعرض زي صورة FATEMA")
+        st.image(scan_file, caption="الصورة اللي اترفعت", width=350)
         if st.button("🔍 اعمل Scan واملا البيانات لوحدها", use_container_width=True):
             with st.spinner("بقرا البطاقة... ثواني"):
-                res = extract_from_id_image(scan_file, manual_angle=manual_angle)
+                res = extract_from_id_image(scan_file, manual_angle=0)
                 st.session_state["scan_name"] = res["name"]
                 st.session_state["scan_dob"] = res["dob"]
                 st.session_state["scan_nid"] = res["national_id"]
-                st.session_state["scan_raw"] = res["raw_text"]
-                st.session_state["scan_debug"] = res.get("debug", [])
+                st.session_state["scan_card"] = res.get("card_no","")
+                st.session_state["scan_provider"] = res.get("provider","")
+                st.session_state["scan_plan"] = res.get("plan","")
+                st.session_state["scan_gender"] = res.get("gender","")
                 st.session_state["scan_done"] = True
-            with st.expander("🔍 شوف اللي اتقرا من الصورة - للتشخيص", expanded=True):
-                st.write(f"طول النص: {len(res.get('raw_text',''))} حرف")
-                st.text(res.get("raw_text","")[:3000] or "(مفيش نص اتقرا)")
-                st.divider()
-                for d in res.get("debug", []):
-                    st.text(d)
-            st.write("**التشخيص:**")
-            for d in res.get("debug", [])[:10]:
-                st.text(d)
-            if res["national_id"] or res["name"]:
-                st.success(f"تم القراءة ✅ - الاسم: {res['name']} | رقم الكارت: {res.get('card_no','')} | الرقم القومي: {res['national_id'] or 'كمله يدوي'} | الميلاد: {res['dob']}")
-                if res.get('card_no'):
-                    st.info(f"🪪 رقم الكارت اللي اتقرا: {res['card_no']} - انسخه في ملاحظاتك لو محتاجه، والرقم القومي (14 رقم) كمله يدوي من البطاقة")
+            if res["name"] or res.get("card_no"):
+                st.success(f"تم القراءة ✅ - {res['name']} | رقم الكارت: {res.get('card_no','')}")
+                if res.get("card_no"):
+                    st.info(f"🪪 رقم الكارت: {res['card_no']} - والرقم القومي (14 رقم) كمله يدوي من البطاقة الشخصية")
             else:
-                st.warning("مقدرتش أقرا كل البيانات - اتأكد ان الصورة واضحة، وعدّل يدوي تحت")
+                st.warning("مقدرتش أقرا البيانات - اتأكد ان الصورة واضحة وحاول تاني")
     if "scan_name" not in st.session_state:
         st.session_state["scan_name"] = ""
         st.session_state["scan_dob"] = ""
@@ -1024,6 +1018,41 @@ with tab1:
     _parts = _scan_full.split()
     _def_first = " ".join(_parts[:2]) if len(_parts)>=2 else _scan_full
     _def_family = " ".join(_parts[2:]) if len(_parts)>2 else ""
+    # حوّل تاريخ الميلاد من الـ Scan (12-Nov-83) لتاريخ حقيقي للتقويم
+    from datetime import date as _d_date, datetime as _d_dt
+    _def_dob = _d_date.today()
+    _scan_dob_raw = st.session_state.get("scan_dob","")
+    if _scan_dob_raw:
+        _parsed = None
+        for _fmt in ("%d-%b-%y", "%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                _parsed = _d_dt.strptime(str(_scan_dob_raw).strip(), _fmt).date()
+                break
+            except:
+                continue
+        if _parsed is None:
+            _m = re.search(r"(\d{1,2})\s?[-–]?\s?([A-Za-z]{3})\s?[-–]?\s?(\d{4}|\d{2})", str(_scan_dob_raw))
+            if _m:
+                _months = {mm:i for i,mm in enumerate(["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"],1)}
+                _mo = _months.get(_m.group(2).lower())
+                if _mo:
+                    _y = int(_m.group(3))
+                    _y = _y if _y>99 else (1900+_y if _y>30 else 2000+_y)
+                    try:
+                        _parsed = _d_date(_y, _mo, int(_m.group(1)))
+                    except:
+                        pass
+        if _parsed:
+            _def_dob = _parsed
+    # القيم الافتراضية من الـ Scan
+    _def_gender = st.session_state.get("scan_gender","") or "Male"
+    _def_plan = st.session_state.get("scan_plan","") or "Plan A"
+    _def_provider = st.session_state.get("scan_provider","") or PROVIDERS[0]
+    # لو الـ Provider اللي اتقرا مش في القايمة، ضيفه للقايمة
+    _prov_options = PROVIDERS if _def_provider in PROVIDERS else PROVIDERS + [_def_provider]
+    _plan_options = ["Plan A", "Plan B", "Plan C", "Plan D"]
+    if _def_plan not in _plan_options:
+        _def_plan = "Plan A"
 
     comp_options = df_comp["Company Name"].tolist() if not df_comp.empty else ["No Company"]
     selected_comp = st.selectbox("Select Company / اختار المدرسة", comp_options)
@@ -1040,10 +1069,10 @@ with tab1:
         first_name = c1.text_input("* First Name - من الـ Scan", value=_def_first)
         family_name = c2.text_input("* Family Name - باقي الاسم", value=_def_family)
         dependency = c2.selectbox("* Dependency", ["Employee", "Spouse", "Child", "Parent"])
-        gender = c1.selectbox("* Gender", ["Male", "Female"])
-        dob = c1.date_input("* Date of Birth")
-        plan = c2.selectbox("* Plan", ["Plan A", "Plan B", "Plan C"])
-        provider_add = c1.selectbox("Insurance Provider / شركة التأمين", PROVIDERS)
+        gender = c1.selectbox("* Gender", ["Male", "Female"], index=0 if _def_gender=="Male" else 1)
+        dob = c1.date_input("* Date of Birth - من الـ Scan", value=_def_dob)
+        plan = c2.selectbox("* Plan - من الكارت", ["Plan A", "Plan B", "Plan C", "Plan D"], index=["Plan A","Plan B","Plan C","Plan D"].index(_def_plan) if _def_plan in ["Plan A","Plan B","Plan C","Plan D"] else 0)
+        provider_add = c1.selectbox("Insurance Provider / شركة التأمين - من الكارت", _prov_options, index=_prov_options.index(_def_provider) if _def_provider in _prov_options else 0)
         policy_num_add = c1.text_input("Policy Number / رقم الوثيقة")
         mobile = c2.text_input("* Mobile Number")
         email = c1.text_input("Email ID")
@@ -1060,7 +1089,7 @@ with tab1:
                 st.success(f"Added {first_name} {family_name} to {selected_comp} ✅")
                 msg = f"New Addition Request - Myshurance:\nCompany: {selected_comp}\nProvider: {provider_add}\nPolicy: {policy_num_add}\nName: {first_name} {family_name}\nStaff ID: {staff_id}\nNational ID: {national_id}\nPlan: {plan}\nMobile: {mobile}"
                 st.session_state["last_wa_msg"] = msg
-                for _k in ["scan_name","scan_dob","scan_nid","scan_done"]:
+                for _k in ["scan_name","scan_dob","scan_nid","scan_done","scan_card","scan_provider","scan_plan","scan_gender"]:
                     if _k in st.session_state:
                         del st.session_state[_k]
                 st.rerun()
