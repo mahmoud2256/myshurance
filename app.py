@@ -171,6 +171,66 @@ def extract_from_id_image(image_file, manual_angle=0):
     except Exception as e:
         debug.append(f"RapidOCR not available: {e} - هيجرب tesseract")
 
+    # --- 2.5) OCR.space API - بيشتغل من غير أي تثبيت، حتى لو tesseract و RapidOCR و opencv مش موجودين ---
+    # ده الحل اللي هيشتغل عندك دلوقتي مهما كان وضع packages.txt
+    try:
+        import urllib.request, urllib.parse, json as _json
+        debug.append("Trying OCR.space API (no install needed)...")
+        # جهز الصورة - صغّرها شوية عشان الـ API
+        _small = img.copy()
+        _scale = 1200 / max(_small.size)
+        if _scale < 1:
+            _small = _small.resize((int(_small.width*_scale), int(_small.height*_scale)), Image.LANCZOS)
+        _buf = io.BytesIO()
+        _small.save(_buf, "JPEG", quality=85)
+        _img_bytes = _buf.getvalue()
+        # ابعت لـ OCR.space - مفتاح تجريبي مجاني helloworld
+        _b64 = base64.b64encode(_img_bytes).decode()
+        _data = urllib.parse.urlencode({"apikey": "helloworld", "base64Image": f"data:image/jpeg;base64,{_b64}", "language": "eng", "isOverlayRequired": False, "OCREngine": "2", "scale": "true"}).encode()
+        _req = urllib.request.Request("https://api.ocr.space/parse/image", data=_data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(_req, timeout=30) as _resp:
+            _res = _json.loads(_resp.read().decode())
+        _txt = ""
+        try:
+            _txt = _res["ParsedResults"][0]["ParsedText"]
+        except:
+            _txt = ""
+        debug.append(f"OCR.space len {len(_txt)}: {_txt[:300]}")
+        if _txt and len(_txt.strip()) > 10:
+            import re as _re2
+            _m2 = _re2.findall(r"\d{14}", _txt.replace(" ","").replace("\n",""))
+            _nid2 = _m2[0] if _m2 else ""
+            _cm2 = _re2.search(r"([A-F0-9]{10,})", _txt.replace(" ","").replace("\n",""))
+            _card2 = _cm2.group(1) if _cm2 else ""
+            _name2 = ""
+            _im2 = _re2.search(r"Insured\s*Name\s*:?\s*([A-Za-z ]+)", _txt, _re2.IGNORECASE)
+            if _im2:
+                _name2 = _im2.group(1).strip()
+            else:
+                for _ln in _txt.split("\n"):
+                    _ln = _ln.strip()
+                    if any(k in _ln.lower() for k in ["allianz","nextcare","policy","card no","category","expiry","dental","optical"]):
+                        continue
+                    _words = _re2.findall(r"[A-Z][A-Z]+", _ln)
+                    if len(_words) >= 2:
+                        _name2 = " ".join(_words[:4])
+                        break
+            _dob2 = ""
+            _dm2 = _re2.search(r"(\d{1,2}[-/]\w{3}[-/]\d{2,4})", _txt)
+            if _dm2:
+                _dob2 = _dm2.group(1)
+            if _name2 or _nid2 or _card2:
+                debug.append(f"OCR.space SUCCESS name={_name2} nid/card={_nid2 or _card2}")
+                return {"name": _name2, "dob": _dob2, "national_id": _nid2 if _nid2 else _card2, "card_no": _card2, "policy_holder": "", "raw_text": _txt, "debug": debug}
+            else:
+                debug.append("OCR.space: قرا نص بس مفيش اسم/رقم - هجرب tesseract")
+                # لو قرا نص بس مفيش بيانات، رجّع النص عشان يبان في التشخيص
+                # وكمل لـ tesseract
+        else:
+            debug.append("OCR.space: رجّع نص فاضي - ممكن الصورة محتاجة تدوير، جرب لف 90")
+    except Exception as e:
+        debug.append(f"OCR.space fail: {str(e)[:200]} - هيجرب tesseract")
+
     # --- 3) tesseract بالتصويت + قص الكارنيه - من v4_2 ---
     def _gray(im, scale):
         g = ImageOps.grayscale(im.resize((int(im.width*scale), int(im.height*scale)), Image.LANCZOS))
@@ -739,7 +799,7 @@ with tab1:
         except:
             st.info("ℹ مفيش Claude Key - هيشتغل بـ tesseract")
         manual_angle = st.selectbox("لو الصورة مايلة / مقلوبة، عدّلها من هنا الأول:", [0, 90, 180, 270], format_func=lambda x: {0: "معدولة ✅", 90: "لف 90 درجة", 180: "لف 180 درجة", 270: "لف 270 درجة"}[x], key="scan_rotate")
-        st.caption("جرب 90 لو الكارنيه متصور بالعرض زي صورة FATEMA")
+        st.caption("جرب 90 لو الكارنيه متصور بالعرض زي صورة FATEMA - والـ Scan دلوقتي بيشتغل من غير أي تثبيت عن طريق OCR.space")
         if st.button("🔍 اعمل Scan واملا البيانات لوحدها", use_container_width=True):
             with st.spinner("بقرا البطاقة... ثواني"):
                 res = extract_from_id_image(scan_file, manual_angle=manual_angle)
