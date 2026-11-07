@@ -23,14 +23,15 @@ DEFAULT_CLIENTS = [
 
 
 # --- OCR: Scan National ID / Card - يملي لوحده ---
-def extract_from_id_image(image_file):
+def extract_from_id_image(image_file, manual_angle=0):
     """
-    Scan بطاقة / كارنيه - بيجرب 3 محركات OCR عشان واحد فيهم ينجح
-    1- RapidOCR (مش محتاج تثبيت برامج)  2- EasyOCR  3- pytesseract
-    بيجرب 4 اتجاهات + تكبير
+    Scan بطاقة / كارنيه - نسخة محسنة
+    المشكلة في الصورة اللي فاتت: الكارنيه متصور مايل + الكلام صغير + الخلفية ملونة
+    الحل: 1- تدوير يدوي 2- تكبير 3x 3- تبييض الخلفية 4- تجربة كل الاتجاهات
     """
     import re
     from PIL import Image, ImageOps, ImageEnhance
+    debug = []
     try:
         img = Image.open(image_file)
         try:
@@ -38,26 +39,37 @@ def extract_from_id_image(image_file):
         except:
             pass
         img = img.convert("RGB")
-    except Exception:
-        return {"name": "", "dob": "", "national_id": "", "raw_text": ""}
-    # جهز نسخ في 4 اتجاهات - الكارنيه ده مقلوب 90 درجة، لازم نعدله
+    except Exception as e:
+        return {"name": "", "dob": "", "national_id": "", "raw_text": f"ERROR OPEN: {e}", "debug": [f"open error {e}"]}
+    # لو المستخدم اختار زاوية يدوي، نبدأ بيها الأول
+    angles = [manual_angle, 0, 90, 180, 270]
+    # شيل التكرار مع الحفاظ على الترتيب
+    seen = set()
+    angles = [a for a in angles if not (a in seen or seen.add(a))]
     variants = []
-    for angle in [0, 90, 180, 270]:
+    for angle in angles:
         v = img.rotate(angle, expand=True) if angle != 0 else img.copy()
         w, h = v.size
-        # كبّر 2x
+        # كبّر 3x بدل 2x - الكلام الصغير لازم يتكبر أكتر
         try:
-            v = v.resize((w*2, h*2), Image.LANCZOS)
+            v_big = v.resize((w*3, h*3), Image.LANCZOS)
         except:
-            pass
-        variants.append(v)
+            v_big = v
+        # نسخة ملونة + نسخة أبيض وأسود متباينة
+        try:
+            gray = v_big.convert("L")
+            gray = ImageOps.autocontrast(gray, cutoff=2)
+            gray = ImageEnhance.Contrast(gray).enhance(2.0)
+            variants.append((f"angle {angle} color 3x", v_big))
+            variants.append((f"angle {angle} gray contrast", gray))
+        except:
+            variants.append((f"angle {angle}", v_big))
     all_texts = []
-    debug_errors = []
-    # --- المحرك 1: RapidOCR - الأسرع والأضمن على Streamlit ---
+    # --- المحرك 1: RapidOCR ---
     try:
         from rapidocr_onnxruntime import RapidOCR
         engine = RapidOCR()
-        for v in variants:
+        for label, v in variants:
             try:
                 import numpy as np
                 arr = np.array(v)
@@ -66,77 +78,60 @@ def extract_from_id_image(image_file):
                     txt = "\n".join([line[1] for line in result])
                     if len(txt.strip()) > 10:
                         all_texts.append(txt)
-            except Exception:
+                        debug.append(f"RapidOCR OK - {label} - {len(txt)} chars: {txt[:120]}")
+                        break  # لقينا نص كويس، كفاية
+            except Exception as e:
+                debug.append(f"RapidOCR fail {label}: {e}")
                 continue
     except Exception as e:
-        debug_errors.append(f"RapidOCR fail: {e}")
-    # --- المحرك 2: pytesseract - لو RapidOCR مش موجود ---
+        debug.append(f"RapidOCR not available: {e}")
+    # --- المحرك 2: pytesseract ---
     if not all_texts:
         try:
             import pytesseract
-            for v in variants:
+            for label, v in variants[:6]:
                 try:
-                    vv = v.convert("L")
-                    vv = ImageOps.autocontrast(vv)
-                    for psm in [6, 11, 3]:
+                    vv = v.convert("L") if v.mode != "L" else v
+                    for psm in [6, 11, 3, 4]:
                         try:
-                            txt = pytesseract.image_to_string(vv, lang="eng", config=f"--psm {psm}")
+                            txt = pytesseract.image_to_string(vv, lang="eng", config=f"--psm {psm} --oem 3")
                             if txt and len(txt.strip()) > 10:
                                 all_texts.append(txt)
-                        except Exception as e2:
-                            debug_errors.append(f"pytesseract psm fail: {e2}")
+                                debug.append(f"tesseract OK - {label} psm {psm} - {len(txt)} chars")
+                                break
+                        except:
                             continue
-                except Exception as e3:
-                    debug_errors.append(f"pytesseract variant fail: {e3}")
+                    if all_texts:
+                        break
+                except Exception as e:
+                    debug.append(f"tesseract fail {label}: {e}")
                     continue
-        except:
-            pass
-    # --- المحرك 3: EasyOCR - بديل أخير ---
-    if not all_texts:
-        try:
-            import easyocr
-            import numpy as np
-            reader = easyocr.Reader(['en','ar'], gpu=False, verbose=False)
-            for v in variants[:2]:
-                try:
-                    res = reader.readtext(np.array(v), detail=0, paragraph=True)
-                    txt = "\n".join(res)
-                    if len(txt.strip()) > 10:
-                        all_texts.append(txt)
-                except:
-                    continue
-        except:
-            pass
+        except Exception as e:
+            debug.append(f"tesseract not available: {e}")
     text = "\n".join(all_texts)
-    # --- استخراج البيانات من النص ---
-    # 1- الرقم القومي 14 رقم أو رقم الكارت
+    debug.append(f"TOTAL TEXT LEN: {len(text)}")
+    # --- استخراج ---
     nid = ""
     m = re.findall(r"\d{14}", text.replace(" ", "").replace("\n","").replace("-",""))
     if m:
         nid = m[0]
-    # لو مفيش رقم قومي، دور على Card No. - زي 8D0EF2AEDE9E827A
     card_no = ""
     cm = re.search(r"([A-F0-9]{10,})", text.replace(" ", "").replace("\n",""))
     if cm:
         card_no = cm.group(1)
-    # 2- الاسم - Insured Name: FATEMA Farag NOURELDIN
     name = ""
-    # دور على السطر اللي بعد Insured Name
     im = re.search(r"Insured\s*Name\s*:?\s*([A-Za-z ]+)", text, re.IGNORECASE)
     if im:
         name = im.group(1).strip()
     else:
-        # دور على أي سطر فيه 2-3 كلمات انجليزي كابيتال
         for line in text.split("\n"):
             line = line.strip()
-            # تجاهل سطور العناوين
             if any(k in line.lower() for k in ["allianz","nextcare","policy","card no","category","expiry","dental","optical","maternity"]):
                 continue
             words = re.findall(r"[A-Z][A-Z]+", line)
             if len(words) >= 2:
                 name = " ".join(words[:4])
                 break
-    # لو الاسم عربي
     if not name:
         lines = [l.strip() for l in text.split("\n") if l.strip()]
         arabic_lines = [l for l in lines if sum(1 for ch in l if '\u0600' <= ch <= '\u06FF') >= 4]
@@ -145,7 +140,6 @@ def extract_from_id_image(image_file):
         if cands:
             name = re.sub(r"[^ \u0600-\u06FF]", "", max(cands, key=len)).strip()
             name = " ".join(name.split()[:4])
-    # 3- تاريخ الميلاد - DoB: 12-Nov-83 أو 12/11/1983
     dob = ""
     dm = re.search(r"(\d{1,2}[-/]\w{3}[-/]\d{2,4})", text)
     if dm:
@@ -154,12 +148,11 @@ def extract_from_id_image(image_file):
         dm2 = re.search(r"(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})", text)
         if dm2:
             dob = dm2.group(1)
-    # 4- Policy Holder - Leaders international college
     policy_holder = ""
     ph = re.search(r"Policy\s*Holder\s*:?\s*([A-Za-z ]+)", text, re.IGNORECASE)
     if ph:
         policy_holder = ph.group(1).strip()
-    return {"name": name, "dob": dob, "national_id": nid if nid else card_no, "card_no": card_no, "policy_holder": policy_holder, "raw_text": text, "debug_errors": debug_errors}
+    return {"name": name, "dob": dob, "national_id": nid if nid else card_no, "card_no": card_no, "policy_holder": policy_holder, "raw_text": text, "debug": debug}
 
 # --- PDF CARD FUNCTION ---
 def generate_card_pdf(name, staff_id, national_id, plan, dependency, company="Myshurance"):
@@ -565,22 +558,24 @@ with tab1:
     scan_file = st.file_uploader("📸 Scan البطاقة الشخصية أو الكارنيه - ارفع الصورة هنا", type=["jpg","jpeg","png"], key="scan_id")
     if scan_file is not None:
         st.image(scan_file, caption="الصورة اللي اترفعت - راجعها", width=350)
+        manual_angle = st.selectbox("لو الصورة مايلة / مقلوبة، عدّلها من هنا الأول:", [0, 90, 180, 270], format_func=lambda x: {0: "معدولة ✅", 90: "لف 90 درجة", 180: "لف 180 درجة", 270: "لف 270 درجة"}[x], key="scan_rotate")
+        st.caption("جرب 90 لو الكارنيه متصور بالعرض زي صورة FATEMA")
         if st.button("🔍 اعمل Scan واملا البيانات لوحدها", use_container_width=True):
             with st.spinner("بقرا البطاقة... ثواني"):
-                res = extract_from_id_image(scan_file)
+                res = extract_from_id_image(scan_file, manual_angle=manual_angle)
                 st.session_state["scan_name"] = res["name"]
                 st.session_state["scan_dob"] = res["dob"]
                 st.session_state["scan_nid"] = res["national_id"]
                 st.session_state["scan_raw"] = res["raw_text"]
+                st.session_state["scan_debug"] = res.get("debug", [])
                 st.session_state["scan_done"] = True
-            with st.expander("🔍 شوف اللي اتقرا من الصورة - للتشخيص"):
-                st.text(f"Raw text len: {len(res.get('raw_text',''))}")
-                st.text(res.get("raw_text","")[:3000] or "مفيش نص اتقرا خالص")
-                if res.get("debug_errors"):
-                    st.text("Errors:")
-                    for e in res["debug_errors"]:
-                        st.text(str(e))
-                st.text("لو مفيش نص، يبقى ملف packages.txt مش موجود على GitHub - شوف الخطوة اللي تحت")
+            with st.expander("🔍 شوف اللي اتقرا من الصورة - للتشخيص", expanded=False):
+                st.write(f"طول النص اللي اتقرا: {len(res.get('raw_text',''))} حرف")
+                st.text(res.get("raw_text","")[:3000] or "(مفيش نص اتقرا خالص)")
+                st.divider()
+                st.write("التشخيص:")
+                for d in res.get("debug", []):
+                    st.text(d)
             if res["national_id"] or res["name"]:
                 st.success(f"تم القراءة ✅ - الاسم: {res['name']} | الرقم: {res['national_id']} | الميلاد: {res['dob']} | المدرسة: {res.get('policy_holder','')}")
                 st.info("راجع البيانات تحت، لو فيه حاجة غلط عدّلها قبل ما تدوس Save - انت المراجع بس")
